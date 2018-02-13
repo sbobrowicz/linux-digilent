@@ -597,11 +597,13 @@ static void xvip_dma_stop_streaming(struct vb2_queue *vq)
 	struct xvip_pipeline *pipe = to_xvip_pipeline(&dma->video.entity);
 	struct xvip_dma_buffer *buf, *nbuf;
 
-	/* Stop the pipeline. */
-	xvip_pipeline_set_stream(pipe, false);
-
 	/* Stop and reset the DMA engine. */
 	dmaengine_terminate_all(dma->dma);
+	//printk("Vishal - %s - Stopped dmaengine\n", __func__);
+
+	/* Stop the pipeline. */
+	xvip_pipeline_set_stream(pipe, false);
+	//printk("Vishal - %s - Stopped streaming\n", __func__);
 
 	/* Cleanup the pipeline and mark it as being stopped. */
 	xvip_pipeline_cleanup(pipe);

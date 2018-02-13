@@ -749,6 +749,10 @@ static void xilinx_frmbuf_halt(struct xilinx_frmbuf_chan *chan)
 	frmbuf_clr(chan, XILINX_FRMBUF_CTRL_OFFSET,
 		   XILINX_FRMBUF_CTRL_AP_START |
 		   XILINX_FRMBUF_CTRL_AUTO_RESTART);
+	while (!(frmbuf_read(chan, XILINX_FRMBUF_CTRL_OFFSET) &
+				XILINX_FRMBUF_CTRL_AP_IDLE)) {
+		//printk("Vishal - %s waiting for frmbuf to be idle\n", __func__);
+	}
 	chan->idle = true;
 }
 
@@ -992,11 +996,15 @@ static int xilinx_frmbuf_terminate_all(struct dma_chan *dchan)
 {
 	struct xilinx_frmbuf_chan *chan = to_xilinx_chan(dchan);
 
+	//printk("Vishal - %s - Stopping framebuffer\n", __func__);
 	xilinx_frmbuf_halt(chan);
+	//printk("Vishal - %s - halted framebuffer\n", __func__);
 	xilinx_frmbuf_free_descriptors(chan);
 	/* worst case frame-to-frame boundary; ensure frame output complete */
 	msleep(50);
+	//printk("Vishal - %s - waited for 50ms\n", __func__);
 	xilinx_frmbuf_chan_reset(chan);
+	//printk("Vishal - %s - channel reset done\n", __func__);
 
 	return 0;
 }
