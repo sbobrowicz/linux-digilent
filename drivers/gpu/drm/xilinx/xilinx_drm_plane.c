@@ -313,22 +313,6 @@ int xilinx_drm_plane_mode_set(struct drm_plane *base_plane,
 	for (; i < MAX_NUM_SUB_PLANES; i++)
 		plane->dma[i].is_active = false;
 
-	/* Do we have a video format aware dma channel?
-	 * so, modify descriptor accordingly. Hueristic test:
-	 * we have a multi-plane format but only one dma channel
-	 */
-	if (plane->dma[0].chan && !plane->dma[1].chan &&
-	    fb_plane_cnt > 1) {
-		u32 stride = plane->dma[0].sgl[0].size +
-			     plane->dma[0].sgl[0].icg;
-
-		plane->dma[0].sgl[0].src_icg =
-			plane->dma[1].xt.src_start -
-			plane->dma[0].xt.src_start -
-			(plane->dma[0].xt.numf * stride);
-
-		plane->dma[0].xt.frame_size = fb_plane_cnt;
-	}
 
 	/* set OSD dimensions */
 	if (plane->manager->osd) {
