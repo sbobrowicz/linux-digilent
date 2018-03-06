@@ -1153,7 +1153,8 @@ static int xilinx_frmbuf_probe(struct platform_device *pdev)
 		return PTR_ERR(xdev->regs);
 
 	/* Initialize the DMA engine */
-	xdev->common.copy_align = 4; /* JPM TODO: need algorithmic setting */
+	/* TODO: Get DMA alignment from device tree property */
+	xdev->common.copy_align = 4;
 	xdev->common.dev = &pdev->dev;
 
 	INIT_LIST_HEAD(&xdev->common.channels);

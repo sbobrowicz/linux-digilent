@@ -120,6 +120,8 @@ EXPORT_SYMBOL_GPL(xvip_get_format_by_fourcc);
 /**
  * xvip_bpl_scaling_factor - Retrieve bpl scaling factor for a 4CC
  * @fourcc: the format 4CC
+ * @numerator: returning numerator of scaling factor
+ * @denominator: returning denominator of scaling factor
  *
  * Return: Return numerator and denominator values by address
  */
@@ -127,12 +129,11 @@ void xvip_bpl_scaling_factor(u32 fourcc, u32 *numerator, u32 *denominator)
 {
 	switch (fourcc) {
 	case V4L2_PIX_FMT_XV15M:
-	case V4L2_PIX_FMT_XV20M:
 		*numerator = 10;
 		*denominator = 8;
 		break;
 	default:
-		*numerator   = 1;
+		*numerator = 1;
 		*denominator = 1;
 		break;
 	}
@@ -142,6 +143,8 @@ EXPORT_SYMBOL_GPL(xvip_bpl_scaling_factor);
 /**
  * xvip_width_padding_factor - Retrieve width's padding factor for a 4CC
  * @fourcc: the format 4CC
+ * @numerator: returning numerator of padding factor
+ * @denominator: returning denominator of padding factor
  *
  * Return: Return numerator and denominator values by address
  */
@@ -149,13 +152,12 @@ void xvip_width_padding_factor(u32 fourcc, u32 *numerator, u32 *denominator)
 {
 	switch (fourcc) {
 	case V4L2_PIX_FMT_XV15M:
-	case V4L2_PIX_FMT_XV20M:
 		/* 32 bits are required per 30 bits of data */
 		*numerator = 32;
 		*denominator = 30;
 		break;
 	default:
-		*numerator   = 1;
+		*numerator = 1;
 		*denominator = 1;
 		break;
 	}

@@ -221,7 +221,7 @@ done:
 static int xvip_pipeline_validate(struct xvip_pipeline *pipe,
 				  struct xvip_dma *start)
 {
-	struct media_entity_graph graph;
+	struct media_graph graph;
 	struct media_entity *entity = &start->video.entity;
 	struct media_device *mdev = entity->graph_obj.mdev;
 	unsigned int num_inputs = 0;
@@ -231,15 +231,15 @@ static int xvip_pipeline_validate(struct xvip_pipeline *pipe,
 	mutex_lock(&mdev->graph_mutex);
 
 	/* Walk the graph to locate the video nodes. */
-	ret = media_entity_graph_walk_init(&graph, entity->graph_obj.mdev);
+	ret = media_graph_walk_init(&graph, mdev);
 	if (ret) {
 		mutex_unlock(&mdev->graph_mutex);
 		return ret;
 	}
 
-	media_entity_graph_walk_start(&graph, entity);
+	media_graph_walk_start(&graph, entity);
 
-	while ((entity = media_entity_graph_walk_next(&graph))) {
+	while ((entity = media_graph_walk_next(&graph))) {
 		struct xvip_dma *dma;
 
 		if (entity->function != MEDIA_ENT_F_IO_V4L)
@@ -257,7 +257,7 @@ static int xvip_pipeline_validate(struct xvip_pipeline *pipe,
 
 	mutex_unlock(&mdev->graph_mutex);
 
-	media_entity_graph_walk_cleanup(&graph);
+	media_graph_walk_cleanup(&graph);
 
 	/* We need exactly one output and zero or one input. */
 	if (num_outputs != 1 || num_inputs > 1)
@@ -347,8 +347,7 @@ static void xvip_dma_complete(void *param)
 {
 	struct xvip_dma_buffer *buf = param;
 	struct xvip_dma *dma = buf->dma;
-	u8 num_planes, i;
-	int sizeimage;
+	int i, sizeimage;
 
 	spin_lock(&dma->queued_lock);
 	list_del(&buf->queue);
@@ -359,20 +358,10 @@ static void xvip_dma_complete(void *param)
 	buf->buf.vb2_buf.timestamp = ktime_get_ns();
 
 	if (V4L2_TYPE_IS_MULTIPLANAR(dma->format.type)) {
-		/* Handling contiguous data with mplanes */
-		if (dma->fmtinfo->buffers == 1) {
+		for (i = 0; i < dma->fmtinfo->buffers; i++) {
 			sizeimage =
-				dma->format.fmt.pix_mp.plane_fmt[0].sizeimage;
-			vb2_set_plane_payload(&buf->buf.vb2_buf, 0, sizeimage);
-		} else {
-			/* Handling non-contiguous data with mplanes */
-			num_planes = dma->format.fmt.pix_mp.num_planes;
-			for (i = 0; i < num_planes; i++) {
-				sizeimage =
-				 dma->format.fmt.pix_mp.plane_fmt[i].sizeimage;
-				vb2_set_plane_payload(&buf->buf.vb2_buf, i,
-						      sizeimage);
-			}
+				dma->format.fmt.pix_mp.plane_fmt[i].sizeimage;
+			vb2_set_plane_payload(&buf->buf.vb2_buf, i, sizeimage);
 		}
 	} else {
 		sizeimage = dma->format.fmt.pix.sizeimage;
@@ -395,29 +384,20 @@ xvip_dma_queue_setup(struct vb2_queue *vq,
 	if (V4L2_TYPE_IS_MULTIPLANAR(dma->format.type)) {
 		if (*nplanes) {
 			if (*nplanes != dma->format.fmt.pix_mp.num_planes)
-			return -EINVAL;
+				return -EINVAL;
 
 			for (i = 0; i < *nplanes; i++) {
-			     sizeimage =
-			      dma->format.fmt.pix_mp.plane_fmt[i].sizeimage;
-			if (sizes[i] < sizeimage)
-				return -EINVAL;
+				sizeimage =
+				  dma->format.fmt.pix_mp.plane_fmt[i].sizeimage;
+				if (sizes[i] < sizeimage)
+					return -EINVAL;
 			}
 		} else {
-			/* Handling contiguous data with mplanes */
-			if (dma->fmtinfo->buffers == 1) {
-			    *nplanes = 1;
-			    sizes[0] =
-			      dma->format.fmt.pix_mp.plane_fmt[0].sizeimage;
-			    return 0;
-			} else {
-			    /* Handling non-contiguous data with mplanes */
-			    *nplanes = dma->format.fmt.pix_mp.num_planes;
-			    for (i = 0; i < *nplanes; i++) {
-				 sizeimage =
+			*nplanes = dma->fmtinfo->buffers;
+			for (i = 0; i < dma->fmtinfo->buffers; i++) {
+				sizeimage =
 				  dma->format.fmt.pix_mp.plane_fmt[i].sizeimage;
-				 sizes[i] = sizeimage;
-			    }
+				sizes[i] = sizeimage;
 			}
 		}
 		return 0;
@@ -451,10 +431,10 @@ static void xvip_dma_buffer_queue(struct vb2_buffer *vb)
 	struct xvip_dma *dma = vb2_get_drv_priv(vb->vb2_queue);
 	struct xvip_dma_buffer *buf = to_xvip_dma_buffer(vbuf);
 	struct dma_async_tx_descriptor *desc;
-	u32 flags, luma_size;
-	u32 padding_factor_nume, padding_factor_deno, bpl_nume, bpl_deno;
 	dma_addr_t addr = vb2_dma_contig_plane_dma_addr(vb, 0);
-
+	u32 flags;
+	u32 luma_size;
+	u32 padding_factor_nume, padding_factor_deno, bpl_nume, bpl_deno;
 
 	if (dma->queue.type == V4L2_BUF_TYPE_VIDEO_CAPTURE ||
 	    dma->queue.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
@@ -463,7 +443,8 @@ static void xvip_dma_buffer_queue(struct vb2_buffer *vb)
 		dma->xt.src_sgl = false;
 		dma->xt.dst_sgl = true;
 		dma->xt.dst_start = addr;
-	} else {
+	} else if (dma->queue.type == V4L2_BUF_TYPE_VIDEO_OUTPUT ||
+		   dma->queue.type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
 		flags = DMA_PREP_INTERRUPT | DMA_CTRL_ACK;
 		dma->xt.dir = DMA_MEM_TO_DEV;
 		dma->xt.src_sgl = true;
@@ -479,16 +460,16 @@ static void xvip_dma_buffer_queue(struct vb2_buffer *vb)
 		struct v4l2_pix_format_mplane *pix_mp;
 
 		pix_mp = &dma->format.fmt.pix_mp;
-		xvip_width_padding_factor (pix_mp->pixelformat,
-					   &padding_factor_nume,
-					   &padding_factor_deno);
-		xvip_bpl_scaling_factor (pix_mp->pixelformat, &bpl_nume,
-					 &bpl_deno);
 		xilinx_xdma_v4l2_config(dma->dma, pix_mp->pixelformat);
+		xvip_width_padding_factor(pix_mp->pixelformat,
+					  &padding_factor_nume,
+					  &padding_factor_deno);
+		xvip_bpl_scaling_factor(pix_mp->pixelformat, &bpl_nume,
+					&bpl_deno);
 		dma->xt.frame_size = dma->fmtinfo->num_planes;
 		dma->sgl[0].size = (pix_mp->width * dma->fmtinfo->bpl_factor *
-					padding_factor_nume * bpl_nume)/
-					(padding_factor_deno * bpl_deno);
+				    padding_factor_nume * bpl_nume) /
+				    (padding_factor_deno * bpl_deno);
 		dma->sgl[0].icg = pix_mp->plane_fmt[0].bytesperline -
 							dma->sgl[0].size;
 		dma->xt.numf = pix_mp->height;
@@ -502,30 +483,30 @@ static void xvip_dma_buffer_queue(struct vb2_buffer *vb)
 		if (dma->fmtinfo->buffers == 1) {
 			dma->sgl[0].dst_icg = 0;
 		} else {
-		    /* Handling non-contiguous data with mplanes */
-		    if (vb->num_planes == 2) {
-			dma_addr_t chroma_addr =
+			/* Handling non-contiguous data with mplanes */
+			if (dma->fmtinfo->buffers == 2) {
+				dma_addr_t chroma_addr =
 					vb2_dma_contig_plane_dma_addr(vb, 1);
-			luma_size = pix_mp->plane_fmt[0].bytesperline *
-								dma->xt.numf;
-			if (chroma_addr > addr)
-			    dma->sgl[0].dst_icg =
-				chroma_addr - addr - luma_size;
-		    }
+				luma_size = pix_mp->plane_fmt[0].bytesperline *
+					    dma->xt.numf;
+				if (chroma_addr > addr)
+					dma->sgl[0].dst_icg = chroma_addr -
+							      addr - luma_size;
+				}
 		}
 	} else {
 		struct v4l2_pix_format *pix;
 
 		pix = &dma->format.fmt.pix;
-		xvip_width_padding_factor (pix->pixelformat,
-					   &padding_factor_nume,
-					   &padding_factor_deno);
-		xvip_bpl_scaling_factor (pix->pixelformat, &bpl_nume,
-					 &bpl_deno);
+		xvip_width_padding_factor(pix->pixelformat,
+					  &padding_factor_nume,
+					  &padding_factor_deno);
+		xvip_bpl_scaling_factor(pix->pixelformat, &bpl_nume,
+					&bpl_deno);
 		dma->xt.frame_size = dma->fmtinfo->num_planes;
 		dma->sgl[0].size = (pix->width * dma->fmtinfo->bpl_factor *
-					padding_factor_nume * bpl_nume)/
-					(padding_factor_deno * bpl_deno);
+				    padding_factor_nume * bpl_nume) /
+				    (padding_factor_deno * bpl_deno);
 		dma->sgl[0].icg = pix->bytesperline - dma->sgl[0].size;
 		dma->xt.numf = pix->height;
 		dma->sgl[0].dst_icg = dma->sgl[0].size;
@@ -569,7 +550,7 @@ static int xvip_dma_start_streaming(struct vb2_queue *vq, unsigned int count)
 	pipe = dma->video.entity.pipe
 	     ? to_xvip_pipeline(&dma->video.entity) : &dma->pipe;
 
-	ret = media_entity_pipeline_start(&dma->video.entity, &pipe->pipe);
+	ret = media_pipeline_start(&dma->video.entity, &pipe->pipe);
 	if (ret < 0)
 		goto error;
 
@@ -596,7 +577,7 @@ static int xvip_dma_start_streaming(struct vb2_queue *vq, unsigned int count)
 
 error_stop:
 	dmaengine_terminate_all(dma->dma);
-	media_entity_pipeline_stop(&dma->video.entity);
+	media_pipeline_stop(&dma->video.entity);
 
 error:
 	/* Give back all queued buffers to videobuf2. */
@@ -624,7 +605,7 @@ static void xvip_dma_stop_streaming(struct vb2_queue *vq)
 
 	/* Cleanup the pipeline and mark it as being stopped. */
 	xvip_pipeline_cleanup(pipe);
-	media_entity_pipeline_stop(&dma->video.entity);
+	media_pipeline_stop(&dma->video.entity);
 
 	/* Give back all queued buffers to videobuf2. */
 	spin_lock_irq(&dma->queued_lock);
@@ -666,10 +647,10 @@ xvip_dma_querycap(struct file *file, void *fh, struct v4l2_capability *cap)
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
 		cap->device_caps |= V4L2_CAP_VIDEO_CAPTURE;
 		break;
-	case V4L2_CAP_VIDEO_OUTPUT_MPLANE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
 		cap->device_caps |= V4L2_CAP_VIDEO_OUTPUT_MPLANE;
 		break;
-	case V4L2_CAP_VIDEO_OUTPUT:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
 		cap->device_caps |= V4L2_CAP_VIDEO_OUTPUT;
 		break;
 	}
@@ -696,18 +677,6 @@ xvip_dma_enum_format(struct file *file, void *fh, struct v4l2_fmtdesc *f)
 	struct v4l2_subdev_format v4l_fmt;
 	int err, ret;
 	const struct xvip_video_format *fmt;
-
-
-	if (dma->format.type == V4L2_BUF_TYPE_VIDEO_CAPTURE ||
-		dma->format.type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
-		if (f->index > 0)
-			return -EINVAL;
-
-		f->pixelformat = dma->format.fmt.pix.pixelformat;
-		strlcpy(f->description, dma->fmtinfo->description,
-			sizeof(f->description));
-		return 0;
-	}
 
 	if (V4L2_TYPE_IS_MULTIPLANAR(dma->format.type)) {
 		/* establish media pad format */
@@ -752,10 +721,11 @@ xvip_dma_enum_format(struct file *file, void *fh, struct v4l2_fmtdesc *f)
 			}
 		}
 
-		/* is index > count of legal values?  return -EINVAL */
+		/* Return err if index is greater than count of legal values */
 		if (f->index >= dma->poss_v4l2_fmt_cnt)
 			return -EINVAL;
-		/* else return pix format in table */
+
+		/* Else return pix format in table */
 		fmt = xvip_get_format_by_fourcc(dma->poss_v4l2_fmts[f->index]);
 		if (IS_ERR(fmt))
 			return PTR_ERR(fmt);
@@ -765,6 +735,13 @@ xvip_dma_enum_format(struct file *file, void *fh, struct v4l2_fmtdesc *f)
 			sizeof(f->description));
 	}
 
+	/* Single plane formats */
+	if (f->index > 0)
+		return -EINVAL;
+
+	f->pixelformat = dma->format.fmt.pix.pixelformat;
+	strlcpy(f->description, dma->fmtinfo->description,
+		sizeof(f->description));
 	return 0;
 }
 
@@ -796,6 +773,7 @@ __xvip_dma_try_format(struct xvip_dma *dma,
 	unsigned int align;
 	unsigned int bpl;
 	unsigned int i, hsub, vsub, plane_width, plane_height;
+	unsigned int fourcc;
 	unsigned int padding_factor_nume, padding_factor_deno;
 	unsigned int bpl_nume, bpl_deno;
 
@@ -803,24 +781,24 @@ __xvip_dma_try_format(struct xvip_dma *dma,
 	 * requested format isn't supported.
 	 */
 	if (V4L2_TYPE_IS_MULTIPLANAR(dma->format.type))
-		info = xvip_get_format_by_fourcc(
-					format->fmt.pix_mp.pixelformat);
+		fourcc = format->fmt.pix_mp.pixelformat;
 	else
-		info = xvip_get_format_by_fourcc(
-					format->fmt.pix.pixelformat);
+		fourcc = format->fmt.pix.pixelformat;
+
+	info = xvip_get_format_by_fourcc(fourcc);
 
 	if (IS_ERR(info))
 		info = xvip_get_format_by_fourcc(XVIP_DMA_DEF_FORMAT);
 
-	xvip_width_padding_factor (info->fourcc, &padding_factor_nume,
-				   &padding_factor_deno);
-	xvip_bpl_scaling_factor (info->fourcc, &bpl_nume, &bpl_deno);
+	xvip_width_padding_factor(info->fourcc, &padding_factor_nume,
+				  &padding_factor_deno);
+	xvip_bpl_scaling_factor(info->fourcc, &bpl_nume, &bpl_deno);
 
 	/* The transfer alignment requirements are expressed in bytes. Compute
 	 * the minimum and maximum values, clamp the requested width and convert
 	 * it back to pixels.
 	 */
-	align = lcm(dma->align, info->bpl_factor);
+	align = lcm(dma->align, info->bpp >> 3);
 	min_width = roundup(XVIP_DMA_MIN_WIDTH, align);
 	max_width = rounddown(XVIP_DMA_MAX_WIDTH, align);
 
@@ -831,9 +809,9 @@ __xvip_dma_try_format(struct xvip_dma *dma,
 		pix_mp->field = V4L2_FIELD_NONE;
 		width = rounddown(pix_mp->width * info->bpl_factor, align);
 		pix_mp->width = clamp(width, min_width, max_width) /
-							info->bpl_factor;
+				info->bpl_factor;
 		pix_mp->height = clamp(pix_mp->height, XVIP_DMA_MIN_HEIGHT,
-							XVIP_DMA_MAX_HEIGHT);
+				       XVIP_DMA_MAX_HEIGHT);
 
 		/*
 		 * Clamp the requested bytes per line value. If the maximum
@@ -851,7 +829,7 @@ __xvip_dma_try_format(struct xvip_dma *dma,
 			pix_mp->plane_fmt[0].bytesperline = clamp(bpl, min_bpl,
 								  max_bpl);
 			pix_mp->plane_fmt[0].sizeimage =
-			      (pix_mp->width * pix_mp->height * info->bpp) >> 3;
+			      pix_mp->width * pix_mp->height * info->bpp / 8;
 		} else {
 			/* Handling non-contiguous data with mplanes */
 			hsub = info->hsub;
@@ -860,8 +838,8 @@ __xvip_dma_try_format(struct xvip_dma *dma,
 				plane_width = pix_mp->width / (i ? hsub : 1);
 				plane_height = pix_mp->height / (i ? vsub : 1);
 				min_bpl = (plane_width * info->bpl_factor *
-					padding_factor_nume * bpl_nume)/
-					(padding_factor_deno * bpl_deno);
+					   padding_factor_nume * bpl_nume) /
+					   (padding_factor_deno * bpl_deno);
 				max_bpl = rounddown(XVIP_DMA_MAX_WIDTH,
 						    dma->align);
 				bpl = pix_mp->plane_fmt[i].bytesperline;
@@ -879,16 +857,17 @@ __xvip_dma_try_format(struct xvip_dma *dma,
 		pix = &format->fmt.pix;
 		pix->field = V4L2_FIELD_NONE;
 
-		width = rounddown(pix->width * info->bpp, align);
-		pix->width = clamp(width, min_width, max_width) / info->bpp;
+		width = rounddown(pix->width * info->bpl_factor, align);
+		pix->width = clamp(width, min_width, max_width) /
+			     info->bpl_factor;
 		pix->height = clamp(pix->height, XVIP_DMA_MIN_HEIGHT,
-							XVIP_DMA_MAX_HEIGHT);
+				    XVIP_DMA_MAX_HEIGHT);
 
 		min_bpl = pix->width * info->bpl_factor;
 		max_bpl = rounddown(XVIP_DMA_MAX_WIDTH, dma->align);
 		bpl = rounddown(pix->bytesperline, dma->align);
 		pix->bytesperline = clamp(bpl, min_bpl, max_bpl);
-		pix->sizeimage = (pix->width * pix->height * info->bpp) >> 3;
+		pix->sizeimage = pix->width * pix->height * info->bpp / 8;
 	}
 
 	if (fmtinfo)
@@ -995,21 +974,22 @@ int xvip_dma_init(struct xvip_composite_device *xdev, struct xvip_dma *dma,
 
 		/* Handling contiguous data with mplanes */
 		if (dma->fmtinfo->buffers == 1) {
-		    pix_mp->plane_fmt[0].bytesperline =
-		      pix_mp->width * dma->fmtinfo->bpl_factor;
-		    pix_mp->plane_fmt[0].sizeimage =
-		      (pix_mp->width * pix_mp->height * dma->fmtinfo->bpp) >> 3;
+			pix_mp->plane_fmt[0].bytesperline =
+				pix_mp->width * dma->fmtinfo->bpl_factor;
+			pix_mp->plane_fmt[0].sizeimage =
+					pix_mp->width * pix_mp->height *
+					dma->fmtinfo->bpp / 8;
 		} else {
 		    /* Handling non-contiguous data with mplanes */
-		    hsub = dma->fmtinfo->hsub;
-		    vsub = dma->fmtinfo->vsub;
-		    for (i = 0; i < dma->fmtinfo->num_planes; i++) {
-				width  = pix_mp->width / (i ? hsub : 1);
+			hsub = dma->fmtinfo->hsub;
+			vsub = dma->fmtinfo->vsub;
+			for (i = 0; i < dma->fmtinfo->buffers; i++) {
+				width = pix_mp->width / (i ? hsub : 1);
 				height = pix_mp->height / (i ? vsub : 1);
-				pix_mp->plane_fmt[i].bytesperline = width *
-						dma->fmtinfo->bpl_factor;
+				pix_mp->plane_fmt[i].bytesperline =
+					width *	dma->fmtinfo->bpl_factor;
 				pix_mp->plane_fmt[i].sizeimage = width * height;
-		    }
+			}
 		}
 	} else {
 		struct v4l2_pix_format *pix;
@@ -1022,7 +1002,7 @@ int xvip_dma_init(struct xvip_composite_device *xdev, struct xvip_dma *dma,
 		pix->height = XVIP_DMA_DEF_HEIGHT;
 		pix->bytesperline = pix->width * dma->fmtinfo->bpl_factor;
 		pix->sizeimage =
-			(pix->width * pix->height * dma->fmtinfo->bpp) >> 3;
+			pix->width * pix->height * dma->fmtinfo->bpp / 8;
 	}
 
 	/* Initialize the media entity... */
@@ -1043,7 +1023,7 @@ int xvip_dma_init(struct xvip_composite_device *xdev, struct xvip_dma *dma,
 	snprintf(dma->video.name, sizeof(dma->video.name), "%s %s %u",
 		 xdev->dev->of_node->name,
 		 (type == V4L2_BUF_TYPE_VIDEO_CAPTURE ||
-		 type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
+		  type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
 					? "output" : "input",
 		 port);
 
