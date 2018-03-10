@@ -98,6 +98,7 @@
 #define	XVMIX_SCALE_FACTOR_2X		1
 #define	XVMIX_SCALE_FACTOR_4X		2
 #define	XVMIX_SCALE_FACTOR_INVALID	3
+#define	XVMIX_BASE_ALIGN		8
 
 /*************************** STATIC DATA  ************************************/
 static const u32 color_table[] = {
@@ -114,6 +115,13 @@ static const u32 color_table[] = {
 	DRM_FORMAT_AYUV,
 	DRM_FORMAT_NV12,
 	DRM_FORMAT_NV16,
+	DRM_FORMAT_Y8,
+	DRM_FORMAT_Y10,
+	DRM_FORMAT_XVUY2101010,
+	DRM_FORMAT_VUY888,
+	DRM_FORMAT_XVUY8888,
+	DRM_FORMAT_XV15,
+	DRM_FORMAT_XV20,
 };
 
 /*********************** Inline Functions/Macros *****************************/
@@ -121,8 +129,6 @@ static const u32 color_table[] = {
 #define to_xlnx_crtc(x)	container_of(x, struct xlnx_crtc, crtc)
 #define to_xlnx_plane(x)	container_of(x, struct xlnx_mix_plane, base)
 #define to_xlnx_mixer(x)	container_of(x, struct xlnx_mix, crtc)
-#define get_xlnx_mixer_mem_align(m)  \
-	sizeof((m)->mixer_hw.layer_data[0].layer_regs.buff_addr1)
 
 /**
  * enum xlnx_mix_layer_id - Describes the layer by index to be acted upon
@@ -771,7 +777,7 @@ static unsigned int xlnx_mix_crtc_get_align(struct xlnx_crtc *crtc)
 	struct xlnx_mix_plane *plane = to_xlnx_plane(crtc->crtc.primary);
 	struct xlnx_mix *m = plane->mixer;
 
-	return get_xlnx_mixer_mem_align(m);
+	return XVMIX_BASE_ALIGN * m->mixer_hw.ppc;
 }
 
 /**
@@ -1261,7 +1267,7 @@ static void xlnx_mix_plane_dpms(struct drm_plane *base_plane, int dpms)
 		/* stop dma engine and release descriptors */
 		for (i = 0; i < XVMIX_MAX_NUM_SUB_PLANES; i++) {
 			if (plane->dma[i].chan && plane->dma[i].is_active) {
-				dmaengine_terminate_all(plane->dma[i].chan);
+				dmaengine_terminate_sync(plane->dma[i].chan);
 				plane->dma[i].is_active = false;
 			}
 		}
@@ -1889,6 +1895,8 @@ static int xlnx_mix_dt_parse(struct device *dev, struct xlnx_mix *mixer)
 			dev_err(dev, "No reset gpio info from dts for mixer\n");
 		return ret;
 	}
+	gpiod_set_raw_value(mixer_hw->reset_gpio, 0);
+	gpiod_set_raw_value(mixer_hw->reset_gpio, 1);
 
 	ret = of_address_to_resource(node, 0, &res);
 	if (ret) {
@@ -2492,7 +2500,7 @@ static void xlnx_mix_init(struct xlnx_mix_hw *mixer)
 	/* default to blue */
 	xlnx_mix_set_bkg_col(mixer, rgb_bg_clr);
 
-	for (i = 0; i <= mixer->layer_cnt; i++) {
+	for (i = 0; i < mixer->layer_cnt; i++) {
 		layer_id = mixer->layer_data[i].id;
 		layer_data = &mixer->layer_data[i];
 		if (layer_id == XVMIX_LAYER_MASTER)

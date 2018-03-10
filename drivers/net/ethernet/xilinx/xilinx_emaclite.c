@@ -164,10 +164,12 @@ static void xemaclite_enable_interrupts(struct net_local *drvdata)
 			 drvdata->base_addr + XEL_TSR_OFFSET);
 
 	/* Enable the Rx interrupts for the first buffer */
-	xemaclite_writel(XEL_RSR_RECV_IE_MASK, drvdata->base_addr + XEL_RSR_OFFSET);
+	xemaclite_writel(XEL_RSR_RECV_IE_MASK,
+			 drvdata->base_addr + XEL_RSR_OFFSET);
 
 	/* Enable the Global Interrupt Enable */
-	xemaclite_writel(XEL_GIER_GIE_MASK, drvdata->base_addr + XEL_GIER_OFFSET);
+	xemaclite_writel(XEL_GIER_GIE_MASK,
+			 drvdata->base_addr + XEL_GIER_OFFSET);
 }
 
 /**
@@ -182,7 +184,8 @@ static void xemaclite_disable_interrupts(struct net_local *drvdata)
 	u32 reg_data;
 
 	/* Disable the Global Interrupt Enable */
-	xemaclite_writel(XEL_GIER_GIE_MASK, drvdata->base_addr + XEL_GIER_OFFSET);
+	xemaclite_writel(XEL_GIER_GIE_MASK,
+			 drvdata->base_addr + XEL_GIER_OFFSET);
 
 	/* Disable the Tx interrupts for the first buffer */
 	reg_data = xemaclite_readl(drvdata->base_addr + XEL_TSR_OFFSET);
@@ -368,6 +371,7 @@ static int xemaclite_send_data(struct net_local *drvdata, u8 *data,
  * xemaclite_recv_data - Receive a frame
  * @drvdata:	Pointer to the Emaclite device private data
  * @data:	Address where the data is to be received
+ * @maxlen:	Maximum supported ethernet packet length
  *
  * This function is intended to be called from the interrupt context or
  * with a wrapper which waits for the receive frame to be available.
@@ -434,9 +438,10 @@ static u16 xemaclite_recv_data(struct net_local *drvdata, u8 *data, int maxlen)
 			 */
 			length = ETH_FRAME_LEN + ETH_FCS_LEN;
 		}
-	} else
+	} else {
 		/* Use the length in the frame, plus the header and trailer */
 		length = proto_type + ETH_HLEN + ETH_FCS_LEN;
+	}
 
 	if (WARN_ON(length > maxlen))
 		length = maxlen;
@@ -479,7 +484,8 @@ static void xemaclite_update_address(struct net_local *drvdata,
 
 	/* Update the MAC address in the EmacLite */
 	reg_data = xemaclite_readl(addr + XEL_TSR_OFFSET);
-	xemaclite_writel(reg_data | XEL_TSR_PROG_MAC_ADDR, addr + XEL_TSR_OFFSET);
+	xemaclite_writel(reg_data | XEL_TSR_PROG_MAC_ADDR,
+			 addr + XEL_TSR_OFFSET);
 
 	/* Wait for EmacLite to finish with the MAC address update */
 	while ((xemaclite_readl(addr + XEL_TSR_OFFSET) &
@@ -571,13 +577,12 @@ static void xemaclite_tx_handler(struct net_device *dev)
 					(u8 *)lp->deferred_skb->data,
 					lp->deferred_skb->len) != 0)
 			return;
-		else {
-			dev->stats.tx_bytes += lp->deferred_skb->len;
-			dev_kfree_skb_irq(lp->deferred_skb);
-			lp->deferred_skb = NULL;
-			netif_trans_update(dev); /* prevent tx timeout */
-			netif_wake_queue(dev);
-		}
+
+		dev->stats.tx_bytes += lp->deferred_skb->len;
+		dev_kfree_skb_irq(lp->deferred_skb);
+		lp->deferred_skb = NULL;
+		netif_trans_update(dev); /* prevent tx timeout */
+		netif_wake_queue(dev);
 	}
 }
 
@@ -672,7 +677,8 @@ static irqreturn_t xemaclite_interrupt(int irq, void *dev_id)
 	}
 
 	/* Check if the Transmission for the second buffer is completed */
-	tx_status = xemaclite_readl(base_addr + XEL_BUFFER_OFFSET + XEL_TSR_OFFSET);
+	tx_status = xemaclite_readl(base_addr +
+				    XEL_BUFFER_OFFSET + XEL_TSR_OFFSET);
 	if (((tx_status & XEL_TSR_XMIT_BUSY_MASK) == 0) &&
 	    (tx_status & XEL_TSR_XMIT_ACTIVE_MASK) != 0) {
 		tx_status &= ~XEL_TSR_XMIT_ACTIVE_MASK;
@@ -759,8 +765,8 @@ static int xemaclite_mdio_read(struct mii_bus *bus, int phy_id, int reg)
 	rc = xemaclite_readl(lp->base_addr + XEL_MDIORD_OFFSET);
 
 	dev_dbg(&lp->ndev->dev,
-		"xemaclite_mdio_read(phy_id=%i, reg=%x) == %x\n",
-		phy_id, reg, rc);
+		"%s(phy_id=%i, reg=%x) == %x\n",
+		__func__, phy_id, reg, rc);
 
 	return rc;
 }
@@ -784,8 +790,8 @@ static int xemaclite_mdio_write(struct mii_bus *bus, int phy_id, int reg,
 	u32 ctrl_reg;
 
 	dev_dbg(&lp->ndev->dev,
-		"xemaclite_mdio_write(phy_id=%i, reg=%x, val=%x)\n",
-		phy_id, reg, val);
+		"%s(phy_id=%i, reg=%x, val=%x)\n",
+		__func__, phy_id, reg, val);
 
 	if (xemaclite_mdio_wait(lp))
 		return -ETIMEDOUT;

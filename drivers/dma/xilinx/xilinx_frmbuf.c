@@ -90,6 +90,7 @@
 #define XILINX_FRMBUF_FMT_BGRA8			26
 #define XILINX_FRMBUF_FMT_BGRX8			27
 #define XILINX_FRMBUF_FMT_UYVY8			28
+#define XILINX_FRMBUF_FMT_BGR8				29
 
 /**
  * struct xilinx_frmbuf_desc_hw - Hardware Descriptor
@@ -212,7 +213,7 @@ static const struct xilinx_frmbuf_format_desc xilinx_frmbuf_formats[] = {
 		.ppw = 1,
 		.num_planes = 1,
 		.drm_fmt = DRM_FORMAT_XRGB8888,
-		.v4l2_fmt = V4L2_PIX_FMT_XRGB32,
+		.v4l2_fmt = V4L2_PIX_FMT_XBGR32,
 		.fmt_bitmask = BIT(2),
 	},
 	{
@@ -316,6 +317,16 @@ static const struct xilinx_frmbuf_format_desc xilinx_frmbuf_formats[] = {
 		.fmt_bitmask = BIT(13),
 	},
 	{
+		.dts_name = "xv15",
+		.id = XILINX_FRMBUF_FMT_Y_UV10_420,
+		.bpw = 32,
+		.ppw = 3,
+		.num_planes = 2,
+		.drm_fmt = 0,
+		.v4l2_fmt = V4L2_PIX_FMT_XV15,
+		.fmt_bitmask = BIT(13),
+	},
+	{
 		.dts_name = "xv20",
 		.id = XILINX_FRMBUF_FMT_Y_UV10,
 		.bpw = 32,
@@ -323,6 +334,16 @@ static const struct xilinx_frmbuf_format_desc xilinx_frmbuf_formats[] = {
 		.num_planes = 2,
 		.drm_fmt = DRM_FORMAT_XV20,
 		.v4l2_fmt = V4L2_PIX_FMT_XV20M,
+		.fmt_bitmask = BIT(14),
+	},
+	{
+		.dts_name = "xv20",
+		.id = XILINX_FRMBUF_FMT_Y_UV10,
+		.bpw = 32,
+		.ppw = 3,
+		.num_planes = 2,
+		.drm_fmt = 0,
+		.v4l2_fmt = V4L2_PIX_FMT_XV20,
 		.fmt_bitmask = BIT(14),
 	},
 	{
@@ -354,6 +375,16 @@ static const struct xilinx_frmbuf_format_desc xilinx_frmbuf_formats[] = {
 		.drm_fmt = DRM_FORMAT_Y10,
 		.v4l2_fmt = V4L2_PIX_FMT_Y10,
 		.fmt_bitmask = BIT(17),
+	},
+	{
+		.dts_name = "rgb888",
+		.id = XILINX_FRMBUF_FMT_BGR8,
+		.bpw = 24,
+		.ppw = 1,
+		.num_planes = 1,
+		.drm_fmt = DRM_FORMAT_RGB888,
+		.v4l2_fmt = V4L2_PIX_FMT_BGR24,
+		.fmt_bitmask = BIT(18),
 	},
 };
 
