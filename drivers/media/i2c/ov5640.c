@@ -1011,6 +1011,7 @@ static int ov5640_set_stream_dvp(struct ov5640_dev *sensor, bool on)
 	u8 hsync_pol = 0;
 	u8 vsync_pol = 0;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	/*
 	 * Note about parallel port configuration.
 	 *
@@ -1111,6 +1112,7 @@ static int ov5640_set_stream_mipi(struct ov5640_dev *sensor, bool on)
 {
 	int ret;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	ret = ov5640_mod_reg(sensor, OV5640_REG_MIPI_CTRL00, BIT(5),
 			     on ? 0 : BIT(5));
 	if (ret)
@@ -1134,6 +1136,7 @@ static int ov5640_get_sysclk(struct ov5640_dev *sensor)
 	u8 temp1, temp2;
 	int ret;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	ret = ov5640_read_reg(sensor, OV5640_REG_SC_PLL_CTRL0, &temp1);
 	if (ret)
 		return ret;
@@ -1172,6 +1175,7 @@ static int ov5640_get_sysclk(struct ov5640_dev *sensor)
 
 	sysclk = VCO / sysdiv / pll_rdiv * 2 / bit_div2x / sclk_rdiv;
 
+	printk(KERN_ERR "ov5640: %s: sysclk=%d VCO=%d\n", __func__, sysclk, VCO);
 	return sysclk;
 }
 
@@ -1564,6 +1568,7 @@ static int ov5640_set_mode_direct(struct ov5640_dev *sensor,
 {
 	int ret;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	if (mode->reg_data == NULL)
 		return -EINVAL;
 
@@ -1586,6 +1591,7 @@ static int ov5640_set_mode(struct ov5640_dev *sensor,
 	enum ov5640_downsize_mode dn_mode, orig_dn_mode;
 	int ret;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	dn_mode = mode->dn_mode;
 	orig_dn_mode = orig_mode->dn_mode;
 
@@ -1638,6 +1644,7 @@ static int ov5640_restore_mode(struct ov5640_dev *sensor)
 {
 	int ret;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	/* first load the initial register values */
 	ret = ov5640_load_regs(sensor, &ov5640_mode_init_data);
 	if (ret < 0)
@@ -1654,6 +1661,8 @@ static void ov5640_power(struct ov5640_dev *sensor, bool enable)
 
 static void ov5640_reset(struct ov5640_dev *sensor)
 {
+
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	if (!sensor->reset_gpio)
 		return;
 
@@ -1677,6 +1686,7 @@ static int ov5640_set_power_on(struct ov5640_dev *sensor)
 	struct i2c_client *client = sensor->i2c_client;
 	int ret;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	ret = clk_prepare_enable(sensor->xclk);
 	if (ret) {
 		dev_err(&client->dev, "%s: failed to enable clock\n",
@@ -1711,6 +1721,7 @@ xclk_off:
 
 static void ov5640_set_power_off(struct ov5640_dev *sensor)
 {
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	ov5640_power(sensor, false);
 	regulator_bulk_disable(OV5640_NUM_SUPPLIES, sensor->supplies);
 	clk_disable_unprepare(sensor->xclk);
@@ -1758,6 +1769,7 @@ static int ov5640_s_power(struct v4l2_subdev *sd, int on)
 	struct ov5640_dev *sensor = to_ov5640_dev(sd);
 	int ret = 0;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	mutex_lock(&sensor->lock);
 
 	/*
@@ -1879,6 +1891,7 @@ static int ov5640_set_fmt(struct v4l2_subdev *sd,
 	const struct ov5640_mode_info *new_mode;
 	int ret;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	if (format->pad != 0)
 		return -EINVAL;
 
@@ -1917,6 +1930,7 @@ static int ov5640_set_framefmt(struct ov5640_dev *sensor,
 	bool is_rgb = false;
 	u8 val;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	switch (format->code) {
 	case MEDIA_BUS_FMT_UYVY8_2X8:
 		/* YUV422, UYVY */
@@ -2130,6 +2144,7 @@ static int ov5640_s_ctrl(struct v4l2_ctrl *ctrl)
 	struct ov5640_dev *sensor = to_ov5640_dev(sd);
 	int ret;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 	/* v4l2_ctrl_lock() locks our own mutex */
 
 	/*
@@ -2186,6 +2201,8 @@ static int ov5640_init_controls(struct ov5640_dev *sensor)
 	struct ov5640_ctrls *ctrls = &sensor->ctrls;
 	struct v4l2_ctrl_handler *hdl = &ctrls->handler;
 	int ret;
+
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
 
 	v4l2_ctrl_handler_init(hdl, 32);
 
@@ -2349,6 +2366,8 @@ static int ov5640_s_stream(struct v4l2_subdev *sd, int enable)
 	struct ov5640_dev *sensor = to_ov5640_dev(sd);
 	int ret = 0;
 
+	printk(KERN_ERR "ov5640: %s: entered\n", __func__);
+
 	mutex_lock(&sensor->lock);
 
 	if (sensor->streaming == !enable) {
@@ -2450,6 +2469,8 @@ static int ov5640_probe(struct i2c_client *client,
 	sensor = devm_kzalloc(dev, sizeof(*sensor), GFP_KERNEL);
 	if (!sensor)
 		return -ENOMEM;
+	
+	printk(KERN_ERR "ov5640: probe: entered\n");
 
 	sensor->i2c_client = client;
 	sensor->fmt.code = MEDIA_BUS_FMT_UYVY8_2X8;
@@ -2528,6 +2549,7 @@ static int ov5640_probe(struct i2c_client *client,
 	if (ret)
 		goto free_ctrls;
 
+	printk(KERN_ERR "ov5640: %s: Done!\n", __func__);
 	return 0;
 
 free_ctrls:
