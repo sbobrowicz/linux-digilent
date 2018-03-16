@@ -598,6 +598,8 @@ static void xcsi2rxss_enable(struct xcsi2rxss_core *core, bool flag)
 {
 	u32 DphyCtrlRegOffset = core->dphy_offset + XDPHY_CTRLREG_OFFSET;
 
+
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	if (flag) {
 		xcsi2rxss_write(core, XCSI_CCR_OFFSET, XCSI_CCR_COREENB_MASK);
 		if (core->dphy_present)
@@ -870,6 +872,7 @@ static int xcsi2rxss_subscribe_event(struct v4l2_subdev *sd,
 	int ret;
 	struct xcsi2rxss_state *xcsi2rxss = to_xcsi2rxssstate(sd);
 
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	mutex_lock(&xcsi2rxss->lock);
 
 	switch (sub->type) {
@@ -930,6 +933,7 @@ static int xcsi2rxss_s_ctrl(struct v4l2_ctrl *ctrl)
 				struct xcsi2rxss_state, ctrl_handler);
 	struct xcsi2rxss_core *core = &xcsi2rxss->core;
 
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	mutex_lock(&xcsi2rxss->lock);
 
 	switch (ctrl->id) {
@@ -1036,7 +1040,7 @@ static int xcsi2rxss_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 	struct xcsi2rxss_state *xcsi2rxss =
 		container_of(ctrl->handler,
 				struct xcsi2rxss_state, ctrl_handler);
-
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	mutex_lock(&xcsi2rxss->lock);
 
 	switch (ctrl->id) {
@@ -1056,6 +1060,7 @@ static int xcsi2rxss_start_stream(struct xcsi2rxss_state *xcsi2rxss)
 {
 	int ret;
 
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	xcsi2rxss_enable(&xcsi2rxss->core, true);
 
 	ret = xcsi2rxss_reset(&xcsi2rxss->core);
@@ -1064,11 +1069,13 @@ static int xcsi2rxss_start_stream(struct xcsi2rxss_state *xcsi2rxss)
 
 	xcsi2rxss_interrupts_enable(&xcsi2rxss->core, true);
 
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: success\n", __func__);
 	return 0;
 }
 
 static void xcsi2rxss_stop_stream(struct xcsi2rxss_state *xcsi2rxss)
 {
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	xcsi2rxss_interrupts_enable(&xcsi2rxss->core, false);
 	xcsi2rxss_enable(&xcsi2rxss->core, false);
 }
@@ -1089,6 +1096,7 @@ static int xcsi2rxss_s_stream(struct v4l2_subdev *sd, int enable)
 	int ret = 0;
 	struct xcsi2rxss_state *xcsi2rxss = to_xcsi2rxssstate(sd);
 
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	mutex_lock(&xcsi2rxss->lock);
 
 	if (xcsi2rxss->suspended) {
@@ -1111,7 +1119,9 @@ static int xcsi2rxss_s_stream(struct v4l2_subdev *sd, int enable)
 			xcsi2rxss->streaming = false;
 		}
 	}
+
 unlock:
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: done, streaming=%s\n", __func__, xcsi2rxss->streaming ? "true" : "false");
 	mutex_unlock(&xcsi2rxss->lock);
 	return ret;
 }
@@ -1121,6 +1131,7 @@ __xcsi2rxss_get_pad_format(struct xcsi2rxss_state *xcsi2rxss,
 				struct v4l2_subdev_pad_config *cfg,
 				unsigned int pad, u32 which)
 {
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	switch (which) {
 	case V4L2_SUBDEV_FORMAT_TRY:
 		return v4l2_subdev_get_try_format(&xcsi2rxss->subdev, cfg, pad);
@@ -1147,7 +1158,7 @@ static int xcsi2rxss_get_format(struct v4l2_subdev *sd,
 {
 
 	struct xcsi2rxss_state *xcsi2rxss = to_xcsi2rxssstate(sd);
-
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	mutex_lock(&xcsi2rxss->lock);
 	fmt->format = *__xcsi2rxss_get_pad_format(xcsi2rxss, cfg,
 							fmt->pad, fmt->which);
@@ -1179,7 +1190,7 @@ static int xcsi2rxss_set_format(struct v4l2_subdev *sd,
 	struct xcsi2rxss_state *xcsi2rxss = to_xcsi2rxssstate(sd);
 	struct xcsi2rxss_core *core = &xcsi2rxss->core;
 	u32 code;
-
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	mutex_lock(&xcsi2rxss->lock);
 
 	/*
@@ -1401,7 +1412,7 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
 	struct xcsi2rxss_core *core = &xcsi2rxss->core;
 	int ret;
 	bool iic_present;
-
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	core->dphy_present = of_property_read_bool(node, "xlnx,dphy-present");
 	dev_dbg(core->dev, "DPHY present property = %s\n",
 			core->dphy_present ? "Present" : "Absent");
@@ -1508,7 +1519,7 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
 			return PTR_ERR(format);
 		}
 
-		if (core->vfb &&
+		if (core->vfb && en
 			(format->vf_code != XVIP_VF_YUV_422) &&
 			(format->vf_code != XVIP_VF_RBG) &&
 			(format->vf_code != XVIP_VF_MONO_SENSOR)) {
@@ -1540,6 +1551,9 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
 		of_node_put(endpoint);
 		dev_dbg(core->dev, "%s : port %d bus type = %d\n",
 				__func__, nports, v4lendpoint.bus_type);
+	
+		printk(KERN_ERR "sjb: xcsi2rxss: %s: port %d bus type = %d\n",
+				__func__, nports, v4lendpoint.bus_type);
 
 		if (v4lendpoint.bus_type == V4L2_MBUS_CSI2) {
 			dev_dbg(core->dev, "%s : base.port = %d base.id = %d\n",
@@ -1550,8 +1564,17 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
 			dev_dbg(core->dev, "%s : mipi number lanes = %d\n",
 				__func__,
 				v4lendpoint.bus.mipi_csi2.num_data_lanes);
+
+		printk(KERN_ERR "sjb: xcsi2rxss: %s: base.port = %d base.id = %d\n",
+					__func__,
+					v4lendpoint.base.port,
+					v4lendpoint.base.id);
+		printk(KERN_ERR "sjb: xcsi2rxss: %s: mipi number lanes = %d\n",
+				__func__,
+				v4lendpoint.bus.mipi_csi2.num_data_lanes);
 		} else {
 			dev_dbg(core->dev, "%s : Not a CSI2 bus\n", __func__);
+			printk(KERN_ERR "sjb: xcsi2rxss: %s: Not a CSI2 bus\n", __func__);
 		}
 
 		/* Count the number of ports. */
@@ -1574,7 +1597,7 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
 				ret);
 		return ret;
 	}
-
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: success\n", __func__);
 	return 0;
 }
 
@@ -1587,6 +1610,8 @@ static int xcsi2rxss_probe(struct platform_device *pdev)
 	u32 i;
 	int ret;
 	int num_ctrls;
+
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 
 	xcsi2rxss = devm_kzalloc(&pdev->dev, sizeof(*xcsi2rxss), GFP_KERNEL);
 	if (!xcsi2rxss)
@@ -1718,6 +1743,7 @@ static int xcsi2rxss_probe(struct platform_device *pdev)
 	/* default states for streaming and suspend */
 	xcsi2rxss->streaming = false;
 	xcsi2rxss->suspended = false;
+	printk(KERN_ERR "sjb: xcsi2rxss: %s: success\n", __func__);
 	return 0;
 
 error:

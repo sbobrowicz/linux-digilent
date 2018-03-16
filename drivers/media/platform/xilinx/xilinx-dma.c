@@ -146,7 +146,8 @@ static int xvip_pipeline_start_stop(struct xvip_pipeline *pipe, bool start)
 
 	entity = &dma->video.entity;
 	pad = NULL;
-
+	
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	while (1) {
 		pad = xvip_get_entity_sink(entity, pad);
 		if (pad == NULL)
@@ -201,6 +202,7 @@ static int xvip_pipeline_set_stream(struct xvip_pipeline *pipe, bool on)
 
 	mutex_lock(&pipe->lock);
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	if (on) {
 		if (pipe->stream_count == pipe->num_dmas - 1) {
 			ret = xvip_pipeline_start_stop(pipe, true);
@@ -228,6 +230,7 @@ static int xvip_pipeline_validate(struct xvip_pipeline *pipe,
 	unsigned int num_outputs = 0;
 	int ret;
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	mutex_lock(&mdev->graph_mutex);
 
 	/* Walk the graph to locate the video nodes. */
@@ -306,6 +309,7 @@ static int xvip_pipeline_prepare(struct xvip_pipeline *pipe,
 {
 	int ret;
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	mutex_lock(&pipe->lock);
 
 	/* If we're the first user validate and initialize the pipeline. */
@@ -319,7 +323,7 @@ static int xvip_pipeline_prepare(struct xvip_pipeline *pipe,
 
 	pipe->use_count++;
 	ret = 0;
-
+	printk(KERN_ERR "sjb: xilinx-dma: %s: success\n", __func__);
 done:
 	mutex_unlock(&pipe->lock);
 	return ret;
@@ -349,6 +353,7 @@ static void xvip_dma_complete(void *param)
 	struct xvip_dma *dma = buf->dma;
 	int i, sizeimage;
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	spin_lock(&dma->queued_lock);
 	list_del(&buf->queue);
 	spin_unlock(&dma->queued_lock);
@@ -379,7 +384,7 @@ xvip_dma_queue_setup(struct vb2_queue *vq,
 	struct xvip_dma *dma = vb2_get_drv_priv(vq);
 	u8 i;
 	int sizeimage;
-
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	/* Multi planar case: Make sure the image size is large enough */
 	if (V4L2_TYPE_IS_MULTIPLANAR(dma->format.type)) {
 		if (*nplanes) {
@@ -400,6 +405,8 @@ xvip_dma_queue_setup(struct vb2_queue *vq,
 				sizes[i] = sizeimage;
 			}
 		}
+
+	printk(KERN_ERR "sjb: xilinx-dma: %s: success\n", __func__);
 		return 0;
 	}
 
@@ -411,6 +418,7 @@ xvip_dma_queue_setup(struct vb2_queue *vq,
 	*nplanes = 1;
 	sizes[0] = sizeimage;
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: success\n", __func__);
 	return 0;
 }
 
@@ -436,6 +444,7 @@ static void xvip_dma_buffer_queue(struct vb2_buffer *vb)
 	u32 luma_size;
 	u32 padding_factor_nume, padding_factor_deno, bpl_nume, bpl_deno;
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	if (dma->queue.type == V4L2_BUF_TYPE_VIDEO_CAPTURE ||
 	    dma->queue.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
 		flags = DMA_PREP_INTERRUPT | DMA_CTRL_ACK;
@@ -540,6 +549,7 @@ static int xvip_dma_start_streaming(struct vb2_queue *vq, unsigned int count)
 
 	dma->sequence = 0;
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	/*
 	 * Start streaming on the pipeline. No link touching an entity in the
 	 * pipeline can be activated or deactivated once streaming is started.
@@ -573,6 +583,7 @@ static int xvip_dma_start_streaming(struct vb2_queue *vq, unsigned int count)
 	/* Start the pipeline. */
 	xvip_pipeline_set_stream(pipe, true);
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: success\n", __func__);
 	return 0;
 
 error_stop:
@@ -638,6 +649,7 @@ xvip_dma_querycap(struct file *file, void *fh, struct v4l2_capability *cap)
 	struct v4l2_fh *vfh = file->private_data;
 	struct xvip_dma *dma = to_xvip_dma(vfh->vdev);
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	cap->capabilities = V4L2_CAP_DEVICE_CAPS | V4L2_CAP_STREAMING
 			  | dma->xdev->v4l2_caps;
 
@@ -779,6 +791,8 @@ __xvip_dma_try_format(struct xvip_dma *dma,
 	unsigned int padding_factor_nume, padding_factor_deno;
 	unsigned int bpl_nume, bpl_deno;
 
+
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	/* Retrieve format information and select the default format if the
 	 * requested format isn't supported.
 	 */
@@ -908,6 +922,7 @@ xvip_dma_set_format(struct file *file, void *fh, struct v4l2_format *format)
 	struct xvip_dma *dma = to_xvip_dma(vfh->vdev);
 	const struct xvip_video_format *info;
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	__xvip_dma_try_format(dma, format, &info);
 
 	if (vb2_is_busy(&dma->queue))
@@ -970,6 +985,7 @@ int xvip_dma_init(struct xvip_composite_device *xdev, struct xvip_dma *dma,
 	int ret;
 	u32 i, hsub, vsub, width, height;
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	dma->xdev = xdev;
 	dma->port = port;
 	mutex_init(&dma->lock);
@@ -1100,6 +1116,7 @@ int xvip_dma_init(struct xvip_composite_device *xdev, struct xvip_dma *dma,
 		goto error;
 	}
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: success\n", __func__);
 	return 0;
 
 error:
