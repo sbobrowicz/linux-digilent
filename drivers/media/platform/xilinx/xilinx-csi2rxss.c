@@ -264,6 +264,11 @@
 #define XCSI_DEFAULT_WIDTH	(1920)
 #define XCSI_DEFAULT_HEIGHT	(1080)
 
+#define XCSI_MIN_WIDTH			32
+#define XCSI_MAX_WIDTH			4096
+#define XCSI_MIN_HEIGHT			32
+#define XCSI_MAX_HEIGHT			4096
+
 /*
  * Macro to return "true" or "false" string if bit is set
  */
@@ -1134,8 +1139,10 @@ __xcsi2rxss_get_pad_format(struct xcsi2rxss_state *xcsi2rxss,
 	printk(KERN_ERR "sjb: xcsi2rxss: %s: entered\n", __func__);
 	switch (which) {
 	case V4L2_SUBDEV_FORMAT_TRY:
+		printk(KERN_ERR "sjb: xcsi2rxss: %s: V4L2_SUBDEV_FORMAT_TRY\n", __func__);
 		return v4l2_subdev_get_try_format(&xcsi2rxss->subdev, cfg, pad);
 	case V4L2_SUBDEV_FORMAT_ACTIVE:
+		printk(KERN_ERR "sjb: xcsi2rxss: %s: V4L2_SUBDEV_FORMAT_ACTIVE\n", __func__);
 		return &xcsi2rxss->formats[pad];
 	default:
 		return NULL;
@@ -1236,6 +1243,10 @@ static int xcsi2rxss_set_format(struct v4l2_subdev *sd,
 		__format->code = code;
 	}
 
+	__format->width = clamp_t(unsigned int, fmt->format.width,
+				  XSCALER_MIN_WIDTH, XSCALER_MAX_WIDTH);
+	__format->height = clamp_t(unsigned int, fmt->format.height,
+				   XSCALER_MIN_HEIGHT, XSCALER_MAX_HEIGHT);
 	mutex_unlock(&xcsi2rxss->lock);
 
 	return 0;

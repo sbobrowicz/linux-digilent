@@ -66,10 +66,11 @@ static int xvip_dma_verify_format(struct xvip_dma *dma)
 	int ret;
 	int width, height;
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: entered\n", __func__);
 	subdev = xvip_dma_remote_subdev(&dma->pad, &fmt.pad);
 	if (subdev == NULL)
 		return -EPIPE;
-
+	printk(KERN_ERR "sjb: xilinx-dma: %s: pipe not NULL\n", __func__);
 	fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
 	ret = v4l2_subdev_call(subdev, pad, get_fmt, NULL, &fmt);
 	if (ret < 0)
@@ -79,9 +80,11 @@ static int xvip_dma_verify_format(struct xvip_dma *dma)
 		return -EINVAL;
 
 	if (V4L2_TYPE_IS_MULTIPLANAR(dma->format.type)) {
+		printk(KERN_ERR "sjb: xilinx-dma: %s: mplane, size check\n", __func__);
 		width = dma->format.fmt.pix_mp.width;
 		height = dma->format.fmt.pix_mp.height;
 	} else {
+		printk(KERN_ERR "sjb: xilinx-dma: %s: not mplane, size check\n", __func__);
 		width = dma->format.fmt.pix.width;
 		height = dma->format.fmt.pix.height;
 	}
@@ -89,6 +92,7 @@ static int xvip_dma_verify_format(struct xvip_dma *dma)
 	if (width != fmt.format.width || height != fmt.format.height)
 		return -EINVAL;
 
+	printk(KERN_ERR "sjb: xilinx-dma: %s: success\n", __func__);
 	return 0;
 }
 
@@ -561,20 +565,25 @@ static int xvip_dma_start_streaming(struct vb2_queue *vq, unsigned int count)
 	     ? to_xvip_pipeline(&dma->video.entity) : &dma->pipe;
 
 	ret = media_pipeline_start(&dma->video.entity, &pipe->pipe);
-	if (ret < 0)
+	if (ret < 0){
+		printk(KERN_ERR "sjb: xilinx-dma: %s: media_pipeline_start fail\n", __func__);
 		goto error;
+	}
 
 	/* Verify that the configured format matches the output of the
 	 * connected subdev.
 	 */
 	ret = xvip_dma_verify_format(dma);
-	if (ret < 0)
+	if (ret < 0) {
+		printk(KERN_ERR "sjb: xilinx-dma: %s: xvip_dma_verify_format fail\n", __func__);
 		goto error_stop;
+	}
 
 	ret = xvip_pipeline_prepare(pipe, dma);
-	if (ret < 0)
+	if (ret < 0) {
+		printk(KERN_ERR "sjb: xilinx-dma: %s: xvip_pipeline_prepare fail\n", __func__);
 		goto error_stop;
-
+	}
 	/* Start the DMA engine. This must be done before starting the blocks
 	 * in the pipeline to avoid DMA synchronization issues.
 	 */
