@@ -1244,9 +1244,9 @@ static int xcsi2rxss_set_format(struct v4l2_subdev *sd,
 	}
 
 	__format->width = clamp_t(unsigned int, fmt->format.width,
-				  XSCALER_MIN_WIDTH, XSCALER_MAX_WIDTH);
+				  XCSI_MIN_WIDTH, XCSI_MAX_WIDTH);
 	__format->height = clamp_t(unsigned int, fmt->format.height,
-				   XSCALER_MIN_HEIGHT, XSCALER_MAX_HEIGHT);
+				   XCSI_MIN_HEIGHT, XCSI_MAX_HEIGHT);
 	mutex_unlock(&xcsi2rxss->lock);
 
 	return 0;
