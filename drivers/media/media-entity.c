@@ -351,6 +351,7 @@ void media_graph_walk_start(struct media_graph *graph,
 	graph->top = 0;
 	graph->stack[graph->top].entity = NULL;
 	stack_push(graph, entity);
+	printk(KERN_ERR "sjb: media-entity: %s: begin graph walk at '%s'\n", __func__, entity->name);
 	dev_dbg(entity->graph_obj.mdev->dev,
 		"begin graph walk at '%s'\n", entity->name);
 }
@@ -464,10 +465,14 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 	struct media_link *link;
 	int ret;
 
+	printk(KERN_ERR "sjb: media-entity: %s: entered\n", __func__);
 	if (!pipe->streaming_count++) {
+		printk(KERN_ERR "sjb: media-entity: %s: !pipe->streaming_count\n", __func__);
 		ret = media_graph_walk_init(&pipe->graph, mdev);
-		if (ret)
+		if (ret) {
+			printk(KERN_ERR "sjb: media-entity: %s: !pipe->streaming_count\n", __func__);
 			goto error_graph_walk_start;
+		}
 	}
 
 	media_graph_walk_start(&pipe->graph, entity);
@@ -477,20 +482,25 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 		DECLARE_BITMAP(has_no_links, MEDIA_ENTITY_MAX_PADS);
 
 		entity->stream_count++;
-
+		printk(KERN_ERR "sjb: media-entity: %s: entered walking while loop\n", __func__);
 		if (WARN_ON(entity->pipe && entity->pipe != pipe)) {
 			ret = -EBUSY;
+			printk(KERN_ERR "sjb: media-entity: %s: entity->pipe != pipe\n", __func__);
 			goto error;
 		}
 
 		entity->pipe = pipe;
 
 		/* Already streaming --- no need to check. */
-		if (entity->stream_count > 1)
+		if (entity->stream_count > 1) {
+			printk(KERN_ERR "sjb: media-entity: %s: Already streaming, no need to check.\n", __func__);
 			continue;
+		}
 
-		if (!entity->ops || !entity->ops->link_validate)
+		if (!entity->ops || !entity->ops->link_validate) {
+			printk(KERN_ERR "sjb: media-entity: %s: !entity->ops || !entity->ops->link_validate\n", __func__);
 			continue;
+		}
 
 		bitmap_zero(active, entity->num_pads);
 		bitmap_fill(has_no_links, entity->num_pads);
@@ -498,7 +508,7 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 		list_for_each_entry(link, &entity->links, list) {
 			struct media_pad *pad = link->sink->entity == entity
 						? link->sink : link->source;
-
+			printk(KERN_ERR "sjb: media-entity: %s: entered for each entity loop\n", __func__);
 			/* Mark that a pad is connected by a link. */
 			bitmap_clear(has_no_links, pad->index, 1);
 
@@ -526,8 +536,12 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 					link->source->entity->name,
 					link->source->index,
 					entity->name, link->sink->index, ret);
+				printk(KERN_ERR "sjb: media-entity: %s: link validation failed for '%s':%u -> '%s':%u, error %d\n", __func__, link->source->entity->name,
+					link->source->index,
+					entity->name, link->sink->index, ret);
 				goto error;
 			}
+			printk(KERN_ERR "sjb: media-entity: %s: leaving for each entity loop\n", __func__);
 		}
 
 		/* Either no links or validated links are fine. */
@@ -540,10 +554,14 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 				entity->name,
 				(unsigned)find_first_zero_bit(
 					active, entity->num_pads));
+			printk(KERN_ERR "sjb: media-entity: %s: '%s':%u must be connected by an enabled link\n", __func__, entity->name,
+				(unsigned)find_first_zero_bit(
+					active, entity->num_pads));
 			goto error;
 		}
+		printk(KERN_ERR "sjb: media-entity: %s: leaving walking while loop\n", __func__);
 	}
-
+	printk(KERN_ERR "sjb: media-entity: %s: success\n", __func__);
 	return 0;
 
 error:
