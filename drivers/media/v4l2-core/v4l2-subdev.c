@@ -543,8 +543,10 @@ int v4l2_subdev_link_validate_default(struct v4l2_subdev *sd,
 	 * progressive formats only.
 	 */
 	if (source_fmt->format.field != sink_fmt->format.field &&
-	    sink_fmt->format.field != V4L2_FIELD_NONE)
+	    sink_fmt->format.field != V4L2_FIELD_NONE) {
+		printk(KERN_ERR "sjb: v4l2-subdev: %s: field match failed, '%d -> %d', FIELD_NONE==%d\n", __func__, source_fmt->format.field, sink_fmt->format.field, V4L2_FIELD_NONE);
 		return -EPIPE;
+	}
 
 	return 0;
 }
@@ -576,6 +578,9 @@ int v4l2_subdev_link_validate(struct media_link *link)
 	struct v4l2_subdev_format sink_fmt, source_fmt;
 	int rval;
 
+	printk(KERN_ERR "sjb: v4l2-subdev: %s: entered for '%s':%u -> '%s':%u\n", __func__, link->source->entity->name,
+					link->source->index,
+					link->sink->entity->name, link->sink->index);
 	rval = v4l2_subdev_link_validate_get_format(
 		link->source, &source_fmt);
 	if (rval < 0)
@@ -585,13 +590,15 @@ int v4l2_subdev_link_validate(struct media_link *link)
 		link->sink, &sink_fmt);
 	if (rval < 0)
 		return 0;
-
+	printk(KERN_ERR "sjb: v4l2-subdev: %s: Obtained both formats '%d:%dx%d -> %d:%dx%d'\n", __func__, source_fmt.code, source_fmt.width, source_fmt.height, sink_fmt.code, sink_fmt.width, sink_fmt.height);
 	sink = media_entity_to_v4l2_subdev(link->sink->entity);
 
 	rval = v4l2_subdev_call(sink, pad, link_validate, link,
 				&source_fmt, &sink_fmt);
-	if (rval != -ENOIOCTLCMD)
+	if (rval != -ENOIOCTLCMD) {
+		printk(KERN_ERR "sjb: v4l2-subdev: %s: subdev call failed, ret=%d\n", __func__, rval);
 		return rval;
+	}
 
 	return v4l2_subdev_link_validate_default(
 		sink, link, &source_fmt, &sink_fmt);

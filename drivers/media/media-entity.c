@@ -482,7 +482,7 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 		DECLARE_BITMAP(has_no_links, MEDIA_ENTITY_MAX_PADS);
 
 		entity->stream_count++;
-		printk(KERN_ERR "sjb: media-entity: %s: entered walking while loop\n", __func__);
+		printk(KERN_ERR "sjb: media-entity: %s: entered walking while loop for '%s'\n", __func__, entity->name);
 		if (WARN_ON(entity->pipe && entity->pipe != pipe)) {
 			ret = -EBUSY;
 			printk(KERN_ERR "sjb: media-entity: %s: entity->pipe != pipe\n", __func__);
@@ -508,7 +508,7 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 		list_for_each_entry(link, &entity->links, list) {
 			struct media_pad *pad = link->sink->entity == entity
 						? link->sink : link->source;
-			printk(KERN_ERR "sjb: media-entity: %s: entered for each entity loop\n", __func__);
+			printk(KERN_ERR "sjb: media-entity: %s: entered for each entity loop for '%s'\n", __func__, link->source->entity->name);
 			/* Mark that a pad is connected by a link. */
 			bitmap_clear(has_no_links, pad->index, 1);
 
