@@ -590,7 +590,7 @@ int v4l2_subdev_link_validate(struct media_link *link)
 		link->sink, &sink_fmt);
 	if (rval < 0)
 		return 0;
-	printk(KERN_ERR "sjb: v4l2-subdev: %s: Obtained both formats '%d:%dx%d -> %d:%dx%d'\n", __func__, source_fmt.code, source_fmt.width, source_fmt.height, sink_fmt.code, sink_fmt.width, sink_fmt.height);
+	printk(KERN_ERR "sjb: v4l2-subdev: %s: Obtained both formats '%d:%dx%d -> %d:%dx%d'\n", __func__, source_fmt.format.code, source_fmt.format.width, source_fmt.format.height, sink_fmt.format.code, sink_fmt.format.width, sink_fmt.format.height);
 	sink = media_entity_to_v4l2_subdev(link->sink->entity);
 
 	rval = v4l2_subdev_call(sink, pad, link_validate, link,
