@@ -114,8 +114,8 @@ struct ov5640_pixfmt {
 };
 
 static const struct ov5640_pixfmt ov5640_formats[] = {
-	{ MEDIA_BUS_FMT_UYVY8_2X8, V4L2_COLORSPACE_SRGB, },
-	{ MEDIA_BUS_FMT_YUYV8_2X8, V4L2_COLORSPACE_SRGB, },
+	{ MEDIA_BUS_FMT_UYVY8_1X16, V4L2_COLORSPACE_SRGB, },
+	{ MEDIA_BUS_FMT_YUYV8_1X16, V4L2_COLORSPACE_SRGB, },
 	{ MEDIA_BUS_FMT_RGB565_2X8_LE, V4L2_COLORSPACE_SRGB, },
 	{ MEDIA_BUS_FMT_RGB565_2X8_BE, V4L2_COLORSPACE_SRGB, },
 };
@@ -1932,11 +1932,11 @@ static int ov5640_set_framefmt(struct ov5640_dev *sensor,
 
 	printk(KERN_ERR "sjb: ov5640: %s: entered\n", __func__);
 	switch (format->code) {
-	case MEDIA_BUS_FMT_UYVY8_2X8:
+	case MEDIA_BUS_FMT_UYVY8_1X16:
 		/* YUV422, UYVY */
 		val = 0x3f;
 		break;
-	case MEDIA_BUS_FMT_YUYV8_2X8:
+	case MEDIA_BUS_FMT_YUYV8_1X16:
 		/* YUV422, YUYV */
 		val = 0x30;
 		break;
@@ -2473,7 +2473,7 @@ static int ov5640_probe(struct i2c_client *client,
 	printk(KERN_ERR "sjb: ov5640: probe: entered\n");
 
 	sensor->i2c_client = client;
-	sensor->fmt.code = MEDIA_BUS_FMT_UYVY8_2X8;
+	sensor->fmt.code = MEDIA_BUS_FMT_UYVY8_1X16;
 	sensor->fmt.width = 640;
 	sensor->fmt.height = 480;
 	sensor->fmt.field = V4L2_FIELD_NONE;
