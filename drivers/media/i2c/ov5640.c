@@ -1731,6 +1731,7 @@ static int ov5640_set_power(struct ov5640_dev *sensor, bool on)
 {
 	int ret = 0;
 
+	printk(KERN_ERR "sjb: ov5640: %s: entered\n", __func__);
 	if (on) {
 		ret = ov5640_set_power_on(sensor);
 		if (ret)
@@ -1753,7 +1754,7 @@ static int ov5640_set_power(struct ov5640_dev *sensor, bool on)
 			if (ret)
 				goto power_off;
 		}
-
+		printk(KERN_ERR "sjb: ov5640: %s: Success\n", __func__);
 		return 0;
 	}
 
@@ -2435,7 +2436,7 @@ static int ov5640_check_chip_id(struct ov5640_dev *sensor)
 	struct i2c_client *client = sensor->i2c_client;
 	int ret = 0;
 	u16 chip_id;
-
+	printk(KERN_ERR "sjb: ov5640: %s: entered\n", __func__);
 	ret = ov5640_set_power_on(sensor);
 	if (ret)
 		return ret;
@@ -2451,7 +2452,11 @@ static int ov5640_check_chip_id(struct ov5640_dev *sensor)
 		dev_err(&client->dev, "%s: wrong chip identifier, expected 0x5640, got 0x%x\n",
 			__func__, chip_id);
 		ret = -ENXIO;
+		goto power_off;
 	}
+
+	printk(KERN_ERR "sjb: ov5640: %s: Success\n", __func__);
+	return 0;
 
 power_off:
 	ov5640_set_power_off(sensor);
