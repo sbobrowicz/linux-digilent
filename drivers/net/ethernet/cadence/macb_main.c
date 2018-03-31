@@ -32,10 +32,12 @@
 #include <linux/of_gpio.h>
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
+#include <linux/ip.h>
+#include <linux/udp.h>
+#include <linux/tcp.h>
 #include <linux/pm_runtime.h>
 #include <linux/crc32.h>
 #include <linux/inetdevice.h>
-
 #include "macb.h"
 
 #define MACB_RX_BUFFER_SIZE	128
@@ -63,10 +65,13 @@
 					| MACB_BIT(TXERR))
 #define MACB_TX_INT_FLAGS	(MACB_TX_ERR_FLAGS | MACB_BIT(TCOMP))
 
-#define MACB_MAX_TX_LEN		((unsigned int)((1 << MACB_TX_FRMLEN_SIZE) - 1))
-#define GEM_MAX_TX_LEN		((unsigned int)((1 << GEM_TX_FRMLEN_SIZE) - 1))
+/* Max length of transmit frame must be a multiple of 8 bytes */
+#define MACB_TX_LEN_ALIGN	8
+#define MACB_MAX_TX_LEN		((unsigned int)((1 << MACB_TX_FRMLEN_SIZE) - 1) & ~((unsigned int)(MACB_TX_LEN_ALIGN - 1)))
+#define GEM_MAX_TX_LEN		((unsigned int)((1 << GEM_TX_FRMLEN_SIZE) - 1) & ~((unsigned int)(MACB_TX_LEN_ALIGN - 1)))
 
 #define GEM_MTU_MIN_SIZE	ETH_MIN_MTU
+#define MACB_NETIF_LSO		NETIF_F_TSO
 
 /* Graceful stop timeouts in us. We should allow up to
  * 1 frame time (10 Mbits/s, full-duplex, ignoring collisions)
@@ -816,8 +821,8 @@ static void macb_tx_error_task(struct work_struct *work)
 				netdev_vdbg(bp->dev, "txerr skb %u (data %p) TX complete\n",
 					    macb_tx_ring_wrap(bp, tail),
 					    skb->data);
-				bp->stats.tx_packets++;
-				bp->stats.tx_bytes += skb->len;
+				bp->dev->stats.tx_packets++;
+				bp->dev->stats.tx_bytes += skb->len;
 			}
 		} else {
 			/* "Buffers exhausted mid-frame" errors may only happen
@@ -916,8 +921,8 @@ static void macb_tx_interrupt(struct macb_queue *queue)
 				netdev_vdbg(bp->dev, "skb %u (data %p) TX complete\n",
 					    macb_tx_ring_wrap(bp, tail),
 					    skb->data);
-				bp->stats.tx_packets++;
-				bp->stats.tx_bytes += skb->len;
+				bp->dev->stats.tx_packets++;
+				bp->dev->stats.tx_bytes += skb->len;
 			}
 
 			/* Now we can safely release resources */
@@ -1017,7 +1022,6 @@ static void discard_partial_frame(struct macb *bp, unsigned int begin,
 	 */
 }
 
-
 static int macb_validate_hw_csum(struct sk_buff *skb)
 {
 	u32 pkt_csum = *((u32 *)&skb->data[skb->len - ETH_FCS_LEN]);
@@ -1060,14 +1064,14 @@ static int gem_rx(struct macb *bp, int budget)
 		if (!(ctrl & MACB_BIT(RX_SOF) && ctrl & MACB_BIT(RX_EOF))) {
 			netdev_err(bp->dev,
 				   "not whole frame pointed by descriptor\n");
-			bp->stats.rx_dropped++;
+			bp->dev->stats.rx_dropped++;
 			break;
 		}
 		skb = bp->rx_skbuff[entry];
 		if (unlikely(!skb)) {
 			netdev_err(bp->dev,
 				   "inconsistent Rx descriptor chain\n");
-			bp->stats.rx_dropped++;
+			bp->dev->stats.rx_dropped++;
 			break;
 		}
 		/* now everything is ready for receiving packet */
@@ -1086,7 +1090,7 @@ static int gem_rx(struct macb *bp, int budget)
 		if (!(bp->dev->features & NETIF_F_RXCSUM)) {
 			if (macb_validate_hw_csum(skb)) {
 				netdev_err(bp->dev, "incorrect FCS\n");
-				bp->stats.rx_dropped++;
+				bp->dev->stats.rx_dropped++;
 				break;
 			}
 		}
@@ -1097,8 +1101,8 @@ static int gem_rx(struct macb *bp, int budget)
 		    GEM_BFEXT(RX_CSUM, ctrl) & GEM_RX_CSUM_CHECKED_MASK)
 			skb->ip_summed = CHECKSUM_UNNECESSARY;
 
-		bp->stats.rx_packets++;
-		bp->stats.rx_bytes += skb->len;
+		bp->dev->stats.rx_packets++;
+		bp->dev->stats.rx_bytes += skb->len;
 
 		gem_ptp_do_rxstamp(bp, skb, desc);
 
@@ -1145,7 +1149,7 @@ static int macb_rx_frame(struct macb *bp, unsigned int first_frag,
 	 */
 	skb = netdev_alloc_skb(bp->dev, len + NET_IP_ALIGN);
 	if (!skb) {
-		bp->stats.rx_dropped++;
+		bp->dev->stats.rx_dropped++;
 		for (frag = first_frag; ; frag++) {
 			desc = macb_rx_desc(bp, frag);
 			desc->addr &= ~MACB_BIT(RX_USED);
@@ -1189,7 +1193,7 @@ static int macb_rx_frame(struct macb *bp, unsigned int first_frag,
 	if (!(bp->dev->features & NETIF_F_RXCSUM)) {
 		if (macb_validate_hw_csum(skb)) {
 			netdev_err(bp->dev, "incorrect FCS\n");
-			bp->stats.rx_dropped++;
+			bp->dev->stats.rx_dropped++;
 
 			/* Make descriptor updates visible to hardware */
 			wmb();
@@ -1204,8 +1208,8 @@ static int macb_rx_frame(struct macb *bp, unsigned int first_frag,
 	__skb_pull(skb, NET_IP_ALIGN);
 	skb->protocol = eth_type_trans(skb, bp->dev);
 
-	bp->stats.rx_packets++;
-	bp->stats.rx_bytes += skb->len;
+	bp->dev->stats.rx_packets++;
+	bp->dev->stats.rx_bytes += skb->len;
 	netdev_vdbg(bp->dev, "received skb of length %u, csum: %08x\n",
 		    skb->len, skb->csum);
 	netif_receive_skb(skb);
@@ -1320,7 +1324,7 @@ static int macb_poll(struct napi_struct *napi, int budget)
 
 	work_done = bp->macbgem_ops.mog_rx(bp, budget);
 	if (work_done < budget) {
-		napi_complete(napi);
+		napi_complete_done(napi, work_done);
 
 		/* Packets received while interrupts were disabled */
 		status = macb_readl(bp, RSR);
@@ -1523,7 +1527,8 @@ static void macb_poll_controller(struct net_device *dev)
 
 static unsigned int macb_tx_map(struct macb *bp,
 				struct macb_queue *queue,
-				struct sk_buff *skb)
+				struct sk_buff *skb,
+				unsigned int hdrlen)
 {
 	dma_addr_t mapping;
 	unsigned int len, entry, i, tx_head = queue->tx_head;
@@ -1531,14 +1536,27 @@ static unsigned int macb_tx_map(struct macb *bp,
 	struct macb_dma_desc *desc;
 	unsigned int offset, size, count = 0;
 	unsigned int f, nr_frags = skb_shinfo(skb)->nr_frags;
-	unsigned int eof = 1;
-	u32 ctrl;
+	unsigned int eof = 1, mss_mfs = 0;
+	u32 ctrl, lso_ctrl = 0, seq_ctrl = 0;
+
+	/* LSO */
+	if (skb_shinfo(skb)->gso_size != 0) {
+		if (ip_hdr(skb)->protocol == IPPROTO_UDP)
+			/* UDP - UFO */
+			lso_ctrl = MACB_LSO_UFO_ENABLE;
+		else
+			/* TCP - TSO */
+			lso_ctrl = MACB_LSO_TSO_ENABLE;
+	}
 
 	/* First, map non-paged data */
 	len = skb_headlen(skb);
+
+	/* first buffer length */
+	size = hdrlen;
+
 	offset = 0;
 	while (len) {
-		size = min(len, bp->max_tx_length);
 		entry = macb_tx_ring_wrap(bp, tx_head);
 		tx_skb = &queue->tx_skb[entry];
 
@@ -1558,6 +1576,8 @@ static unsigned int macb_tx_map(struct macb *bp,
 		offset += size;
 		count++;
 		tx_head++;
+
+		size = min(len, bp->max_tx_length);
 	}
 
 	/* Then, map paged data from fragments */
@@ -1611,6 +1631,21 @@ static unsigned int macb_tx_map(struct macb *bp,
 	desc = macb_tx_desc(queue, entry);
 	desc->ctrl = ctrl;
 
+	if (lso_ctrl) {
+		if (lso_ctrl == MACB_LSO_UFO_ENABLE)
+			/* include header and FCS in value given to h/w */
+			mss_mfs = skb_shinfo(skb)->gso_size +
+					skb_transport_offset(skb) +
+					ETH_FCS_LEN;
+		else /* TSO */ {
+			mss_mfs = skb_shinfo(skb)->gso_size;
+			/* TCP Sequence Number Source Select
+			 * can be set only for TSO
+			 */
+			seq_ctrl = 0;
+		}
+	}
+
 	do {
 		i--;
 		entry = macb_tx_ring_wrap(bp, i);
@@ -1624,6 +1659,16 @@ static unsigned int macb_tx_map(struct macb *bp,
 		}
 		if (unlikely(entry == (bp->tx_ring_size - 1)))
 			ctrl |= MACB_BIT(TX_WRAP);
+
+		/* First descriptor is header descriptor */
+		if (i == queue->tx_head) {
+			ctrl |= MACB_BF(TX_LSO, lso_ctrl);
+			ctrl |= MACB_BF(TX_TCP_SEQ_SRC, seq_ctrl);
+		} else
+			/* Only set MSS/MFS on payload descriptors
+			 * (second or later descriptor)
+			 */
+			ctrl |= MACB_BF(MSS_MFS, mss_mfs);
 
 		/* Set TX buffer descriptor */
 		macb_set_addr(bp, desc, tx_skb->mapping);
@@ -1650,6 +1695,43 @@ dma_error:
 	return 0;
 }
 
+static netdev_features_t macb_features_check(struct sk_buff *skb,
+					     struct net_device *dev,
+					     netdev_features_t features)
+{
+	unsigned int nr_frags, f;
+	unsigned int hdrlen;
+
+	/* Validate LSO compatibility */
+
+	/* there is only one buffer */
+	if (!skb_is_nonlinear(skb))
+		return features;
+
+	/* length of header */
+	hdrlen = skb_transport_offset(skb);
+	if (ip_hdr(skb)->protocol == IPPROTO_TCP)
+		hdrlen += tcp_hdrlen(skb);
+
+	/* For LSO:
+	 * When software supplies two or more payload buffers all payload buffers
+	 * apart from the last must be a multiple of 8 bytes in size.
+	 */
+	if (!IS_ALIGNED(skb_headlen(skb) - hdrlen, MACB_TX_LEN_ALIGN))
+		return features & ~MACB_NETIF_LSO;
+
+	nr_frags = skb_shinfo(skb)->nr_frags;
+	/* No need to check last fragment */
+	nr_frags--;
+	for (f = 0; f < nr_frags; f++) {
+		const skb_frag_t *frag = &skb_shinfo(skb)->frags[f];
+
+		if (!IS_ALIGNED(skb_frag_size(frag), MACB_TX_LEN_ALIGN))
+			return features & ~MACB_NETIF_LSO;
+	}
+	return features;
+}
+
 static inline int macb_clear_csum(struct sk_buff *skb)
 {
 	/* no change for packets without checksum offloading */
@@ -1674,7 +1756,28 @@ static int macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct macb *bp = netdev_priv(dev);
 	struct macb_queue *queue = &bp->queues[queue_index];
 	unsigned long flags;
-	unsigned int count, nr_frags, frag_size, f;
+	unsigned int desc_cnt, nr_frags, frag_size, f;
+	unsigned int hdrlen;
+	bool is_lso, is_udp = 0;
+
+	is_lso = (skb_shinfo(skb)->gso_size != 0);
+
+	if (is_lso) {
+		is_udp = !!(ip_hdr(skb)->protocol == IPPROTO_UDP);
+
+		/* length of headers */
+		if (is_udp)
+			/* only queue eth + ip headers separately for UDP */
+			hdrlen = skb_transport_offset(skb);
+		else
+			hdrlen = skb_transport_offset(skb) + tcp_hdrlen(skb);
+		if (skb_headlen(skb) < hdrlen) {
+			netdev_err(bp->dev, "Error - LSO headers fragmented!!!\n");
+			/* if this is required, would need to copy to single buffer */
+			return NETDEV_TX_BUSY;
+		}
+	} else
+		hdrlen = min(skb_headlen(skb), bp->max_tx_length);
 
 #if defined(DEBUG) && defined(VERBOSE_DEBUG)
 	netdev_vdbg(bp->dev,
@@ -1689,18 +1792,22 @@ static int macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	 * socket buffer: skb fragments of jumbo frames may need to be
 	 * split into many buffer descriptors.
 	 */
-	count = DIV_ROUND_UP(skb_headlen(skb), bp->max_tx_length);
+	if (is_lso && (skb_headlen(skb) > hdrlen))
+		/* extra header descriptor if also payload in first buffer */
+		desc_cnt = DIV_ROUND_UP((skb_headlen(skb) - hdrlen), bp->max_tx_length) + 1;
+	else
+		desc_cnt = DIV_ROUND_UP(skb_headlen(skb), bp->max_tx_length);
 	nr_frags = skb_shinfo(skb)->nr_frags;
 	for (f = 0; f < nr_frags; f++) {
 		frag_size = skb_frag_size(&skb_shinfo(skb)->frags[f]);
-		count += DIV_ROUND_UP(frag_size, bp->max_tx_length);
+		desc_cnt += DIV_ROUND_UP(frag_size, bp->max_tx_length);
 	}
 
 	spin_lock_irqsave(&bp->lock, flags);
 
 	/* This is a hard error, log it. */
 	if (CIRC_SPACE(queue->tx_head, queue->tx_tail,
-		       bp->tx_ring_size) < count) {
+		       bp->tx_ring_size) < desc_cnt) {
 		netif_stop_subqueue(dev, queue_index);
 		spin_unlock_irqrestore(&bp->lock, flags);
 		netdev_dbg(bp->dev, "tx_head = %u, tx_tail = %u\n",
@@ -1714,7 +1821,7 @@ static int macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 
 	/* Map socket buffer for DMA transfer */
-	if (!macb_tx_map(bp, queue, skb)) {
+	if (!macb_tx_map(bp, queue, skb, hdrlen)) {
 		dev_kfree_skb_any(skb);
 		goto unlock;
 	}
@@ -1750,7 +1857,7 @@ static void macb_init_rx_buffer_size(struct macb *bp, size_t size)
 		}
 	}
 
-	netdev_dbg(bp->dev, "mtu [%u] rx_buffer_size [%Zu]\n",
+	netdev_dbg(bp->dev, "mtu [%u] rx_buffer_size [%zu]\n",
 		   bp->dev->mtu, bp->rx_buffer_size);
 }
 
@@ -1963,7 +2070,6 @@ static void macb_init_rings(struct macb *bp)
 	bp->queues[0].tx_tail = 0;
 	desc->ctrl |= MACB_BIT(TX_WRAP);
 
-	bp->rx_tail = 0;
 	macb_init_tieoff(bp);
 }
 
@@ -2417,7 +2523,7 @@ static void gem_update_stats(struct macb *bp)
 static struct net_device_stats *gem_get_stats(struct macb *bp)
 {
 	struct gem_stats *hwstat = &bp->hw_stats.gem;
-	struct net_device_stats *nstat = &bp->stats;
+	struct net_device_stats *nstat = &bp->dev->stats;
 
 	gem_update_stats(bp);
 
@@ -2488,7 +2594,7 @@ static void gem_get_ethtool_strings(struct net_device *dev, u32 sset, u8 *p)
 static struct net_device_stats *macb_get_stats(struct net_device *dev)
 {
 	struct macb *bp = netdev_priv(dev);
-	struct net_device_stats *nstat = &bp->stats;
+	struct net_device_stats *nstat = &bp->dev->stats;
 	struct macb_stats *hwstat = &bp->hw_stats.macb;
 
 	if (macb_is_gem(bp))
@@ -2570,6 +2676,56 @@ static void macb_get_regs(struct net_device *dev, struct ethtool_regs *regs,
 		regs_buff[13] = gem_readl(bp, DMACFG);
 }
 
+
+static void macb_get_ringparam(struct net_device *netdev,
+			       struct ethtool_ringparam *ring)
+{
+	struct macb *bp = netdev_priv(netdev);
+
+	ring->rx_max_pending = MAX_RX_RING_SIZE;
+	ring->tx_max_pending = MAX_TX_RING_SIZE;
+
+	ring->rx_pending = bp->rx_ring_size;
+	ring->tx_pending = bp->tx_ring_size;
+}
+
+static int macb_set_ringparam(struct net_device *netdev,
+			      struct ethtool_ringparam *ring)
+{
+	struct macb *bp = netdev_priv(netdev);
+	u32 new_rx_size, new_tx_size;
+	unsigned int reset = 0;
+
+	if ((ring->rx_mini_pending) || (ring->rx_jumbo_pending))
+		return -EINVAL;
+
+	new_rx_size = clamp_t(u32, ring->rx_pending,
+			      MIN_RX_RING_SIZE, MAX_RX_RING_SIZE);
+	new_rx_size = roundup_pow_of_two(new_rx_size);
+
+	new_tx_size = clamp_t(u32, ring->tx_pending,
+			      MIN_TX_RING_SIZE, MAX_TX_RING_SIZE);
+	new_tx_size = roundup_pow_of_two(new_tx_size);
+
+	if ((new_tx_size == bp->tx_ring_size) &&
+	    (new_rx_size == bp->rx_ring_size)) {
+		/* nothing to do */
+		return 0;
+	}
+
+	if (netif_running(bp->dev)) {
+		reset = 1;
+		macb_close(bp->dev);
+	}
+
+	bp->rx_ring_size = new_rx_size;
+	bp->tx_ring_size = new_tx_size;
+
+	if (reset)
+		macb_open(bp->dev);
+
+	return 0;
+}
 
 #ifdef CONFIG_MACB_USE_HWSTAMP
 static unsigned int gem_get_tsu_rate(struct macb *bp)
@@ -2653,6 +2809,8 @@ static const struct ethtool_ops macb_ethtool_ops = {
 	.get_ts_info		= ethtool_op_get_ts_info,
 	.get_link_ksettings     = phy_ethtool_get_link_ksettings,
 	.set_link_ksettings     = phy_ethtool_set_link_ksettings,
+	.get_ringparam		= macb_get_ringparam,
+	.set_ringparam		= macb_set_ringparam,
 };
 
 static const struct ethtool_ops gem_ethtool_ops = {
@@ -2665,6 +2823,8 @@ static const struct ethtool_ops gem_ethtool_ops = {
 	.get_sset_count		= gem_get_sset_count,
 	.get_link_ksettings     = phy_ethtool_get_link_ksettings,
 	.set_link_ksettings     = phy_ethtool_set_link_ksettings,
+	.get_ringparam		= macb_get_ringparam,
+	.set_ringparam		= macb_set_ringparam,
 };
 
 static int macb_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
@@ -2739,6 +2899,7 @@ static const struct net_device_ops macb_netdev_ops = {
 	.ndo_poll_controller	= macb_poll_controller,
 #endif
 	.ndo_set_features	= macb_set_features,
+	.ndo_features_check	= macb_features_check,
 };
 
 /* Configure peripheral capabilities according to device tree
@@ -3024,6 +3185,11 @@ static int macb_init(struct platform_device *pdev)
 
 	/* Set features */
 	dev->hw_features = NETIF_F_SG;
+
+	/* Check LSO capability */
+	if (GEM_BFEXT(PBUF_LSO, gem_readl(bp, DCFG6)))
+		dev->hw_features |= MACB_NETIF_LSO;
+
 	/* Checksum offload is only available on gem with packet buffer */
 	if (macb_is_gem(bp) && !(bp->caps & MACB_CAPS_FIFO_MODE))
 		dev->hw_features |= NETIF_F_HW_CSUM | NETIF_F_RXCSUM;
@@ -3243,18 +3409,18 @@ static void at91ether_rx(struct net_device *dev)
 		skb = netdev_alloc_skb(dev, pktlen + 2);
 		if (skb) {
 			skb_reserve(skb, 2);
-			memcpy(skb_put(skb, pktlen), p_recv, pktlen);
+			skb_put_data(skb, p_recv, pktlen);
 
 			skb->protocol = eth_type_trans(skb, dev);
-			lp->stats.rx_packets++;
-			lp->stats.rx_bytes += pktlen;
+			dev->stats.rx_packets++;
+			dev->stats.rx_bytes += pktlen;
 			netif_rx(skb);
 		} else {
-			lp->stats.rx_dropped++;
+			dev->stats.rx_dropped++;
 		}
 
 		if (desc->ctrl & MACB_BIT(RX_MHASH_MATCH))
-			lp->stats.multicast++;
+			dev->stats.multicast++;
 
 		/* reset ownership bit */
 		desc->addr &= ~MACB_BIT(RX_USED);
@@ -3289,15 +3455,15 @@ static irqreturn_t at91ether_interrupt(int irq, void *dev_id)
 	if (intstatus & MACB_BIT(TCOMP)) {
 		/* The TCOM bit is set even if the transmission failed */
 		if (intstatus & (MACB_BIT(ISR_TUND) | MACB_BIT(ISR_RLE)))
-			lp->stats.tx_errors++;
+			dev->stats.tx_errors++;
 
 		if (lp->skb) {
 			dev_kfree_skb_irq(lp->skb);
 			lp->skb = NULL;
 			dma_unmap_single(NULL, lp->skb_physaddr,
 					 lp->skb_length, DMA_TO_DEVICE);
-			lp->stats.tx_packets++;
-			lp->stats.tx_bytes += lp->skb_length;
+			dev->stats.tx_packets++;
+			dev->stats.tx_bytes += lp->skb_length;
 		}
 		netif_wake_queue(dev);
 	}
@@ -3414,10 +3580,11 @@ static const struct macb_config sama5d2_config = {
 
 static const struct macb_config sama5d3_config = {
 	.caps = MACB_CAPS_SG_DISABLED | MACB_CAPS_GIGABIT_MODE_AVAILABLE
-	      | MACB_CAPS_USRIO_DEFAULT_IS_MII_GMII,
+	      | MACB_CAPS_USRIO_DEFAULT_IS_MII_GMII | MACB_CAPS_JUMBO,
 	.dma_burst_length = 16,
 	.clk_init = macb_clk_init,
 	.init = macb_init,
+	.jumbo_max_len = 10240,
 };
 
 static const struct macb_config sama5d4_config = {

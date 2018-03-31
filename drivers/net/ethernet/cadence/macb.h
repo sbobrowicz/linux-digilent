@@ -465,6 +465,8 @@
 #define GEM_TSU_SIZE				1
 
 /* Bitfields in DCFG6. */
+#define GEM_PBUF_LSO_OFFSET			27
+#define GEM_PBUF_LSO_SIZE			1
 #define GEM_DAW64_OFFSET			23
 #define GEM_DAW64_SIZE				1
 
@@ -560,6 +562,10 @@
 #define MACB_CAPS_GIGABIT_MODE_AVAILABLE	0x20000000
 #define MACB_CAPS_SG_DISABLED			0x40000000
 #define MACB_CAPS_MACB_IS_GEM			0x80000000
+
+/* LSO settings */
+#define MACB_LSO_UFO_ENABLE			0x01
+#define MACB_LSO_TSO_ENABLE			0x02
 
 /* Bit manipulation macros */
 #define MACB_BIT(name)					\
@@ -712,6 +718,12 @@ struct gem_tx_ts {
 #define MACB_TX_LAST_SIZE			1
 #define MACB_TX_NOCRC_OFFSET			16
 #define MACB_TX_NOCRC_SIZE			1
+#define MACB_MSS_MFS_OFFSET			16
+#define MACB_MSS_MFS_SIZE			14
+#define MACB_TX_LSO_OFFSET			17
+#define MACB_TX_LSO_SIZE			2
+#define MACB_TX_TCP_SEQ_SRC_OFFSET		19
+#define MACB_TX_TCP_SEQ_SRC_SIZE		1
 #define MACB_TX_BUF_EXHAUSTED_OFFSET		27
 #define MACB_TX_BUF_EXHAUSTED_SIZE		1
 #define MACB_TX_UNDERRUN_OFFSET			28
@@ -725,7 +737,6 @@ struct gem_tx_ts {
 
 #define GEM_TX_FRMLEN_OFFSET			0
 #define GEM_TX_FRMLEN_SIZE			14
-
 
 /* Buffer descriptor constants */
 #define GEM_RX_CSUM_NONE			0
@@ -1022,7 +1033,6 @@ struct macb {
 	struct clk		*tsu_clk;
 	struct net_device	*dev;
 	struct napi_struct	napi;
-	struct net_device_stats	stats;
 	union {
 		struct macb_stats	macb;
 		struct gem_stats	gem;
