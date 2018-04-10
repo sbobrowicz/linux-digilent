@@ -20,6 +20,7 @@
 #include <linux/compiler.h>
 #include <linux/delay.h>
 #include <linux/device.h>
+#include <linux/gpio/consumer.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/kernel.h>
@@ -1628,7 +1629,7 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
 	xcsi2rxss->rst_gpio = devm_gpiod_get(core->dev, "reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(xcsi2rxss->rst_gpio)) {
 		if (PTR_ERR(xcsi2rxss->rst_gpio) != -EPROBE_DEFER)
-			dev_err(dev, "Reset GPIO not setup in DT");
+			dev_err(core->dev, "Reset GPIO not setup in DT");
 		return PTR_ERR(xcsi2rxss->rst_gpio);
 	}
 
