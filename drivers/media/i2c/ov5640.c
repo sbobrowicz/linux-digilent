@@ -1741,19 +1741,19 @@ static int ov5640_set_power(struct ov5640_dev *sensor, bool on)
 		if (ret)
 			goto power_off;
 
-		if (sensor->ep.bus_type == V4L2_MBUS_CSI2) {
-			/*
-			 * start streaming briefly followed by stream off in
-			 * order to coax the clock lane into LP-11 state.
-			 */
-			ret = ov5640_set_stream_mipi(sensor, true);
-			if (ret)
-				goto power_off;
-			usleep_range(1000, 2000);
-			ret = ov5640_set_stream_mipi(sensor, false);
-			if (ret)
-				goto power_off;
-		}
+//		if (sensor->ep.bus_type == V4L2_MBUS_CSI2) {
+//			/*
+//			 * start streaming briefly followed by stream off in
+//			 * order to coax the clock lane into LP-11 state.
+//			 */
+//			ret = ov5640_set_stream_mipi(sensor, true);
+//			if (ret)
+//				goto power_off;
+//			usleep_range(1000, 2000);
+//			ret = ov5640_set_stream_mipi(sensor, false);
+//			if (ret)
+//				goto power_off;
+//		}
 		printk(KERN_ERR "sjb: ov5640: %s: Success\n", __func__);
 		return 0;
 	}
@@ -2343,6 +2343,8 @@ static int ov5640_s_frame_interval(struct v4l2_subdev *sd,
 
 	sensor->current_fr = frame_rate;
 	sensor->frame_interval = fi->interval;
+	sensor->current_mode = ov5640_find_mode(sensor, frame_rate, mode->width,
+						mode->height, true);
 	sensor->pending_mode_change = true;
 out:
 	mutex_unlock(&sensor->lock);
